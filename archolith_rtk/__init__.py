@@ -51,6 +51,21 @@ from .shrink import (
     ShrinkCharsResult,
     ShrinkTokensResult,
 )
+from .context_manager import (
+    ContextManager,
+    PostUsageDecision,
+    PostUsageKind,
+    PreflightDecision,
+    FoldResult,
+    get_context_limit,
+    simple_extractive_summarizer,
+    HISTORY_FOLD_THRESHOLD,
+    HISTORY_FOLD_TAIL_FRACTION,
+    HISTORY_FOLD_AGGRESSIVE_THRESHOLD,
+    FORCE_SUMMARY_THRESHOLD,
+    PREFLIGHT_EMERGENCY_THRESHOLD,
+    DEFAULT_CONTEXT_TOKENS,
+)
 
 # Minimum result length (chars) to justify filtering overhead.
 _MIN_FILTER_CHARS = 500
