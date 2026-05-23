@@ -37,6 +37,20 @@ from .telemetry import (
     reset_filter_telemetry_store,
     FilterTelemetrySummary,
 )
+from .shrink import (
+    count_tokens,
+    truncate_for_chars,
+    truncate_for_tokens,
+    shrink_oversized_tool_results,
+    shrink_oversized_tool_results_by_tokens,
+    shrink_oversized_tool_call_args_by_tokens,
+    estimate_conversation_tokens,
+    estimate_request_tokens,
+    ChatMessage,
+    ToolCall,
+    ShrinkCharsResult,
+    ShrinkTokensResult,
+)
 
 # Minimum result length (chars) to justify filtering overhead.
 _MIN_FILTER_CHARS = 500
