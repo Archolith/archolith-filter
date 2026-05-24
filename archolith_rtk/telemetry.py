@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # Heuristic: ~4 chars per token for English/code text.
 CHARS_PER_TOKEN = 4

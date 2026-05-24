@@ -47,6 +47,7 @@ class CommandCategory(str, Enum):
 ```python
 @dataclass(frozen=True)
 class FilterConfig:
+    risk_level: FilterRiskLevel = FilterRiskLevel.BALANCED
     # Per-category head/tail line counts (see architecture.md for full list)
     generic_head: int = 20
     generic_tail: int = 30
@@ -59,6 +60,18 @@ class FilterConfig:
     read_comment_threshold: int = 10
     read_css_rule_collapse: bool = True
 ```
+
+### FilterRiskLevel (`config.py`)
+
+```python
+class FilterRiskLevel(str, Enum):
+    LOW = "low"
+    BALANCED = "balanced"
+    HIGH = "high"
+```
+
+Used to choose a preset compression posture before applying explicit env-var or
+programmatic overrides.
 
 ### FilterMeta (`filter_meta.py`)
 

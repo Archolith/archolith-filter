@@ -77,7 +77,12 @@ Tool output text
 
 ### Layer 1 — config.py
 
-`FilterConfig` dataclass with all per-category thresholds. Loaded from `ARCHOLITH_RTK_FILTER_*` env vars via `from_env()`. `boost_for_verbose()` doubles head/tail limits for verbose commands. Upper bounds prevent typos from disabling filtering.
+`FilterConfig` dataclass with all per-category thresholds plus a `risk_level`
+preset selector. Loaded from `ARCHOLITH_RTK_FILTER_*` env vars via
+`from_env()`. `base_config_for_risk_level()` returns programmatic presets for
+`low`, `balanced`, and `high` risk. Explicit env-var overrides are applied on
+top of the selected preset. `boost_for_verbose()` doubles head/tail limits for
+verbose commands. Upper bounds prevent typos from disabling filtering.
 
 ### Layer 2 — shrink.py
 
@@ -117,6 +122,7 @@ All env vars use the prefix `ARCHOLITH_RTK_FILTER_`:
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `ARCHOLITH_RTK_FILTERS` | Set to `off`/`false`/`0` to disable all filtering | enabled |
+| `ARCHOLITH_RTK_FILTER_RISK_LEVEL` | Preset compression posture: `low`, `balanced`, or `high` | `balanced` |
 | `ARCHOLITH_RTK_FILTER_GENERIC_HEAD` | Generic head lines | 20 |
 | `ARCHOLITH_RTK_FILTER_GENERIC_TAIL` | Generic tail lines | 30 |
 | `ARCHOLITH_RTK_FILTER_TEST_HEAD` | Test head lines | 10 |
@@ -149,6 +155,12 @@ All env vars use the prefix `ARCHOLITH_RTK_FILTER_`:
 | `ARCHOLITH_RTK_FILTER_JSON_MAX_VALUE_LEN` | Max JSON value length | 80 |
 
 All numeric values are clamped to upper bounds (lines: 500, entries: 1000, depth: 10, value length: 10000).
+
+Risk-level presets adjust multiple thresholds together:
+
+- `low`: preserves more lines, files, keys, and tail context
+- `balanced`: existing default behavior
+- `high`: more aggressive compression for higher token savings
 
 ## External Dependencies
 

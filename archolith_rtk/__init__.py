@@ -11,61 +11,148 @@ Public API:
 
 from __future__ import annotations
 
-from .classifier import classify_command, CommandCategory, ClassifiedCommand
-from .config import FilterConfig, from_env, boost_for_verbose, is_filter_enabled, is_verbose_command
-from .filter_meta import FilterMeta, parse_result_meta
-from .filters import FilterResult
-from .filters.generic import generic_filter, GenericFilterOptions
-from .filters.git_diff import git_diff_filter, GitDiffFilterOptions
-from .filters.git_log import git_log_filter, GitLogFilterOptions
-from .filters.git_status import git_status_filter, GitStatusFilterOptions
-from .filters.git_show import git_show_filter, GitShowFilterOptions
-from .filters.json_output import json_filter, JsonFilterOptions
-from .filters.fs_listing import fs_listing_filter, FsListingFilterOptions
-from .filters.search import search_filter, SearchFilterOptions
-from .filters.test_run_output import filter_test_output, TestFilterOptions
-from .filters.build_output import build_filter, BuildFilterOptions
-from .filters.lint_output import lint_filter, LintFilterOptions
-from .filters.typecheck_output import typecheck_filter, TypecheckFilterOptions
-from .filters.logs import log_filter, LogFilterOptions
-from .raw_store import RawOutputStore, get_raw_output_store, reset_raw_output_store
-from .strip_ansi import strip_ansi
-from .telemetry import (
-    record_filter_telemetry,
-    record_filter_telemetry_with_tokens,
-    get_filter_telemetry_store,
-    reset_filter_telemetry_store,
-    FilterTelemetrySummary,
-)
-from .shrink import (
-    count_tokens,
-    truncate_for_chars,
-    truncate_for_tokens,
-    shrink_oversized_tool_results,
-    shrink_oversized_tool_results_by_tokens,
-    shrink_oversized_tool_call_args_by_tokens,
-    estimate_conversation_tokens,
-    estimate_request_tokens,
-    ChatMessage,
-    ToolCall,
-    ShrinkCharsResult,
-    ShrinkTokensResult,
+from .classifier import ClassifiedCommand, CommandCategory, classify_command
+from .config import (
+    FilterConfig,
+    FilterRiskLevel,
+    base_config_for_risk_level,
+    boost_for_verbose,
+    from_env,
+    is_filter_enabled,
+    is_verbose_command,
+    normalize_risk_level,
 )
 from .context_manager import (
+    DEFAULT_CONTEXT_TOKENS,
+    FORCE_SUMMARY_THRESHOLD,
+    HISTORY_FOLD_AGGRESSIVE_THRESHOLD,
+    HISTORY_FOLD_TAIL_FRACTION,
+    HISTORY_FOLD_THRESHOLD,
+    PREFLIGHT_EMERGENCY_THRESHOLD,
     ContextManager,
+    FoldResult,
     PostUsageDecision,
     PostUsageKind,
     PreflightDecision,
-    FoldResult,
     get_context_limit,
     simple_extractive_summarizer,
-    HISTORY_FOLD_THRESHOLD,
-    HISTORY_FOLD_TAIL_FRACTION,
-    HISTORY_FOLD_AGGRESSIVE_THRESHOLD,
-    FORCE_SUMMARY_THRESHOLD,
-    PREFLIGHT_EMERGENCY_THRESHOLD,
-    DEFAULT_CONTEXT_TOKENS,
 )
+from .filter_meta import FilterMeta, parse_result_meta
+from .filters import FilterResult
+from .filters.build_output import BuildFilterOptions, build_filter
+from .filters.fs_listing import FsListingFilterOptions, fs_listing_filter
+from .filters.generic import GenericFilterOptions, generic_filter
+from .filters.git_diff import GitDiffFilterOptions, git_diff_filter
+from .filters.git_log import GitLogFilterOptions, git_log_filter
+from .filters.git_show import GitShowFilterOptions, git_show_filter
+from .filters.git_status import GitStatusFilterOptions, git_status_filter
+from .filters.json_output import JsonFilterOptions, json_filter
+from .filters.lint_output import LintFilterOptions, lint_filter
+from .filters.logs import LogFilterOptions, log_filter
+from .filters.search import SearchFilterOptions, search_filter
+from .filters.test_run_output import TestFilterOptions, filter_test_output
+from .filters.typecheck_output import TypecheckFilterOptions, typecheck_filter
+from .raw_store import RawOutputStore, get_raw_output_store, reset_raw_output_store
+from .shrink import (
+    ChatMessage,
+    ShrinkCharsResult,
+    ShrinkTokensResult,
+    ToolCall,
+    count_tokens,
+    estimate_conversation_tokens,
+    estimate_request_tokens,
+    shrink_messages,
+    shrink_oversized_tool_call_args_by_tokens,
+    shrink_oversized_tool_results,
+    shrink_oversized_tool_results_by_tokens,
+    truncate_for_chars,
+    truncate_for_tokens,
+)
+from .strip_ansi import strip_ansi
+from .telemetry import (
+    FilterTelemetrySummary,
+    get_filter_telemetry_store,
+    record_filter_telemetry,
+    record_filter_telemetry_with_tokens,
+    reset_filter_telemetry_store,
+)
+
+__all__ = [
+    "BuildFilterOptions",
+    "ChatMessage",
+    "ClassifiedCommand",
+    "CommandCategory",
+    "ContextManager",
+    "DEFAULT_CONTEXT_TOKENS",
+    "FORCE_SUMMARY_THRESHOLD",
+    "FilterConfig",
+    "FilterRiskLevel",
+    "FilterMeta",
+    "FilterResult",
+    "FilterTelemetrySummary",
+    "FoldResult",
+    "FsListingFilterOptions",
+    "GenericFilterOptions",
+    "GitDiffFilterOptions",
+    "GitLogFilterOptions",
+    "GitShowFilterOptions",
+    "GitStatusFilterOptions",
+    "HISTORY_FOLD_AGGRESSIVE_THRESHOLD",
+    "HISTORY_FOLD_TAIL_FRACTION",
+    "HISTORY_FOLD_THRESHOLD",
+    "JsonFilterOptions",
+    "LintFilterOptions",
+    "LogFilterOptions",
+    "PREFLIGHT_EMERGENCY_THRESHOLD",
+    "PostUsageDecision",
+    "PostUsageKind",
+    "PreflightDecision",
+    "RawOutputStore",
+    "SearchFilterOptions",
+    "ShrinkCharsResult",
+    "ShrinkTokensResult",
+    "TestFilterOptions",
+    "ToolCall",
+    "TypecheckFilterOptions",
+    "base_config_for_risk_level",
+    "boost_for_verbose",
+    "build_filter",
+    "classify_command",
+    "count_tokens",
+    "estimate_conversation_tokens",
+    "estimate_request_tokens",
+    "filter_output",
+    "filter_test_output",
+    "from_env",
+    "fs_listing_filter",
+    "generic_filter",
+    "get_context_limit",
+    "get_filter_telemetry_store",
+    "get_raw_output_store",
+    "git_diff_filter",
+    "git_log_filter",
+    "git_show_filter",
+    "git_status_filter",
+    "is_filter_enabled",
+    "is_verbose_command",
+    "json_filter",
+    "lint_filter",
+    "log_filter",
+    "normalize_risk_level",
+    "parse_result_meta",
+    "record_filter_telemetry_with_tokens",
+    "reset_filter_telemetry_store",
+    "reset_raw_output_store",
+    "search_filter",
+    "shrink_messages",
+    "shrink_oversized_tool_call_args_by_tokens",
+    "shrink_oversized_tool_results",
+    "shrink_oversized_tool_results_by_tokens",
+    "simple_extractive_summarizer",
+    "truncate_for_chars",
+    "truncate_for_tokens",
+    "typecheck_filter",
+]
 
 # Minimum result length (chars) to justify filtering overhead.
 _MIN_FILTER_CHARS = 500
@@ -190,6 +277,14 @@ def filter_output(
             category = _classify_tool(tool, stripped)
         else:
             category = CommandCategory.GENERIC
+
+        if category in {"passthrough", "shell"}:
+            return FilterResult(
+                output=stripped,
+                raw_chars=len(text),
+                filtered_chars=len(stripped),
+                truncated=False,
+            )
 
         result = _category_filter(category, stripped, effective_cfg)
 

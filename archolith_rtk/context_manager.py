@@ -18,9 +18,10 @@ extractive summarizer for deterministic operation without LLM calls.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Callable, Protocol
+from enum import StrEnum
+from typing import Protocol
 
 from .shrink import (
     ChatMessage,
@@ -60,7 +61,7 @@ HISTORY_FOLD_MARKER = (
 # --- Decision types ---
 
 
-class PostUsageKind(str, Enum):
+class PostUsageKind(StrEnum):
     NONE = "none"
     FOLD = "fold"
     EXIT_WITH_SUMMARY = "exit-with-summary"
@@ -156,7 +157,7 @@ def simple_extractive_summarizer(messages: list[ChatMessage], max_chars: int = 3
         parts.append("")
     if important:
         parts.append("Key findings:")
-        parts.extend(f"- {l}" for l in important[:30])
+        parts.extend(f"- {line}" for line in important[:30])
 
     result = "\n".join(parts)
     if len(result) > max_chars:
@@ -269,6 +270,24 @@ class ContextManager:
 
         return base
 
+    def decide_after_turn(
+        self,
+        messages: list[ChatMessage] | None = None,
+        *,
+        prompt_tokens: int,
+        already_folded_this_turn: bool = False,
+    ) -> PostUsageDecision:
+        """Backward-compatible alias for older RTK call sites.
+
+        The historic API accepted the current message list even though the
+        decision only depends on prompt token usage and context limits.
+        """
+        _ = messages
+        return self.decide_after_usage(
+            prompt_tokens=prompt_tokens,
+            already_folded_this_turn=already_folded_this_turn,
+        )
+
     def decide_preflight(
         self,
         messages: list[ChatMessage],
@@ -288,7 +307,10 @@ class ContextManager:
         messages: list[ChatMessage],
         keep_recent_tokens: int | None = None,
     ) -> FoldResult:
-        """Replace older turns with one summary message; keep tail within budget."""
+        """Replace older turns with one summary message; keep tail within budget.
+
+        The provided ``messages`` list is compacted in place when a fold occurs.
+        """
         ctx_max = self._get_ctx_max()
         tail_budget = keep_recent_tokens or int(ctx_max * HISTORY_FOLD_TAIL_FRACTION)
 
@@ -337,10 +359,11 @@ class ContextManager:
             content=HISTORY_FOLD_MARKER + summary,
         )
         replacement = [summary_msg] + tail
+        messages[:] = replacement
 
         return FoldResult(
             folded=True,
-            before_messages=len(messages),
+            before_messages=len(head) + len(tail),
             after_messages=len(replacement),
             summary_chars=len(summary),
         )

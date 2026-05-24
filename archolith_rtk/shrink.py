@@ -425,6 +425,39 @@ def shrink_oversized_tool_call_args_by_tokens(
     )
 
 
+def shrink_messages(
+    messages: list[dict] | list[ChatMessage],
+    *,
+    max_chars: int | None = None,
+    max_tokens: int | None = None,
+) -> list[dict] | list[ChatMessage]:
+    """Compatibility wrapper for shrinking OpenAI-format message lists.
+
+    Accepts either dict-format OpenAI messages or ChatMessage objects and
+    returns the same shape it received. Exactly one budget must be set.
+    """
+    if (max_chars is None) == (max_tokens is None):
+        raise ValueError("Provide exactly one of max_chars or max_tokens")
+
+    typed_messages = [
+        msg if isinstance(msg, ChatMessage) else ChatMessage.from_dict(msg)
+        for msg in messages
+    ]
+
+    if max_tokens is not None:
+        result_messages = shrink_oversized_tool_results_by_tokens(
+            typed_messages, max_tokens=max_tokens
+        ).messages
+    else:
+        result_messages = shrink_oversized_tool_results(
+            typed_messages, max_chars=max_chars or 0
+        ).messages
+
+    if not messages or isinstance(messages[0], ChatMessage):
+        return result_messages
+    return [msg.to_dict() for msg in result_messages]
+
+
 def estimate_conversation_tokens(messages: list[ChatMessage]) -> int:
     """Estimate total tokens across all messages (content + tool_calls).
 

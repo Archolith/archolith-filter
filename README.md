@@ -84,6 +84,7 @@ All thresholds are configurable via environment variables with the prefix
 
 ```bash
 ARCHOLITH_RTK_FILTERS=off                    # Disable all filtering
+ARCHOLITH_RTK_FILTER_RISK_LEVEL=balanced    # low | balanced | high
 ARCHOLITH_RTK_FILTER_GENERIC_HEAD=20         # Generic head lines
 ARCHOLITH_RTK_FILTER_GENERIC_TAIL=30         # Generic tail lines
 ARCHOLITH_RTK_FILTER_GIT_DIFF_FILE_HEAD=5    # Lines per file in diff stat
@@ -91,6 +92,26 @@ ARCHOLITH_RTK_FILTER_GIT_DIFF_TAIL=50        # Diff body tail lines
 ARCHOLITH_RTK_FILTER_TEST_HEAD=10            # Test output head lines
 ARCHOLITH_RTK_FILTER_TEST_TAIL=40            # Test output tail lines
 ```
+
+`ARCHOLITH_RTK_FILTER_RISK_LEVEL` controls the default compression posture:
+
+- `low`: lower risk of information loss, lower token savings
+- `balanced`: default preset
+- `high`: higher token savings, higher risk of information loss
+
+Programmatic callers can use the same presets without environment variables:
+
+```python
+from archolith_rtk import FilterRiskLevel, base_config_for_risk_level, filter_output
+
+config = base_config_for_risk_level(FilterRiskLevel.HIGH)
+result = filter_output(large_text, command="rg --heading prompt_tokens src", config=config)
+```
+
+Explicit environment-variable overrides still win over the preset. For example,
+`ARCHOLITH_RTK_FILTER_RISK_LEVEL=high` plus
+`ARCHOLITH_RTK_FILTER_JSON_MAX_DEPTH=4` uses the high-risk preset for everything
+except JSON depth, which is forced to `4`.
 
 ### Verbose Boosting
 
@@ -133,6 +154,7 @@ char-based and token-based.
 ```python
 from archolith_rtk import (
     ChatMessage,
+    shrink_messages,
     shrink_oversized_tool_results,
     shrink_oversized_tool_results_by_tokens,
     shrink_oversized_tool_call_args_by_tokens,
@@ -143,6 +165,9 @@ messages = [
     ChatMessage(role="assistant", content=None, tool_calls=[...]),
     ChatMessage(role="tool", content=huge_test_output, tool_call_id="1"),
 ]
+
+# Compatibility wrapper for OpenAI-format dict messages or ChatMessage objects
+messages = shrink_messages(messages, max_tokens=2000)
 
 # Char-based: truncate tool messages > max_chars
 result = shrink_oversized_tool_results(messages, max_chars=5000)
@@ -201,9 +226,10 @@ from archolith_rtk import ContextManager, ChatMessage
 cm = ContextManager(ctx_max=128000)
 
 # After a turn's API response
-decision = cm.decide_after_usage(prompt_tokens=65000)
+# decide_after_turn(...) is kept as a compatibility alias for older call sites.
+decision = cm.decide_after_turn(messages, prompt_tokens=65000)
 if decision.kind == "fold":
-    # Fold conversation history
+    # Fold conversation history in place
     result = cm.fold(messages, keep_recent_tokens=decision.tail_budget)
 
 # Before sending a request
@@ -257,6 +283,61 @@ ruff check .
 # Type check (if mypy installed)
 mypy archolith_rtk/
 ```
+
+## Benchmarking
+
+The repository includes a dedicated benchmark suite under
+`benchmarks/`. It is not part of the default `pytest tests` run.
+
+```bash
+# Install benchmark dependency via the dev extra
+pip install -e ".[dev]"
+
+# Run only the benchmark suite
+pytest benchmarks -v --benchmark-only
+
+# Show skipped benchmark modules if pytest-benchmark is missing
+pytest benchmarks -v -rs
+
+# Save a machine-readable result file for comparisons
+pytest benchmarks -v --benchmark-only --benchmark-json benchmarks/results/latest.json
+```
+
+The benchmark suite covers:
+
+- Layer 1: `filter_output()` on git diff, heading-mode search, bracketed logs, and JSON payloads
+- Layer 2: `shrink_messages()` and the lower-level shrink helpers
+- Layer 3: `ContextManager.fold()`, `decide_preflight()`, and `emergency_compact()`
+
+Fixture corpora live in `benchmarks/fixtures/`, and larger synthetic
+conversation histories are generated in `benchmarks/conftest.py`.
+
+For a more practical benchmark focused on token savings plus retention checks,
+run the reporting script:
+
+```bash
+python benchmarks/practical_report.py
+```
+
+That writes:
+
+- `benchmarks/results/practical-latest.json`
+- `benchmarks/results/practical-latest.md`
+
+The practical report evaluates every Layer 1 filter scenario at all three
+`FilterRiskLevel` presets (low, balanced, high) and tracks:
+
+- risk level per scenario row
+- tokens before and after compression
+- tokens saved and savings percentage
+- median and p95 runtime per scenario
+- scenario-specific retention checks (e.g. preserving readiness lines,
+  JSON keys, and fold summary markers)
+- acceptance checks: preset ordering (high >= balanced >= low savings),
+  minimum savings thresholds, and retention marker survival across presets
+
+The script exits non-zero when any scenario or acceptance check fails,
+making it suitable for CI gating.
 
 ## License
 

@@ -1,0 +1,164 @@
+$ git diff --staged
+[exit 0]
+src/core/context_manager.py | 18 ++++++++++--------
+src/core/filter_router.py | 22 ++++++++++++++--------
+src/core/search_grouping.py | 16 +++++++++-------
+src/core/log_parser.py | 14 ++++++++------
+src/core/token_budget.py | 12 +++++++-----
+src/core/json_filter.py | 20 ++++++++++++--------
+src/core/history_fold.py | 26 ++++++++++++++++----------
+7 files changed, 83 insertions(+), 45 deletions(-)
+diff --git a/src/core/context_manager.py b/src/core/context_manager.py
+index 1111111..2222222 100644
+--- a/src/core/context_manager.py
++++ b/src/core/context_manager.py
+@@ -10,6 +10,18 @@ export function foldHistory(history) {
+-    return history;
++    const summary = buildSummary(history);
++    const recent = history.slice(-8);
++    return [summary, ...recent];
+ }
++function buildSummary(history) {
++    return {
++        role: "assistant",
++        content: history.map((entry) => entry.role).join(", "),
++    };
++}
++function shouldFold(history, usageRatio) {
++    return usageRatio > 0.5 && history.length > 10;
++}
++function estimateTail(history) {
++    return history.slice(-4);
++}
+diff --git a/src/core/filter_router.py b/src/core/filter_router.py
+index 3333333..4444444 100644
+--- a/src/core/filter_router.py
++++ b/src/core/filter_router.py
+@@ -18,7 +18,22 @@ export function routeFilter(command, payload) {
+-    return genericFilter(payload);
++    if (command.startsWith("git diff")) {
++        return gitDiffFilter(payload);
++    }
++    if (command.startsWith("rg ")) {
++        return searchFilter(payload);
++    }
++    if (command.startsWith("pytest")) {
++        return testFilter(payload);
++    }
++    if (command.startsWith("npm run build")) {
++        return buildFilter(payload);
++    }
++    if (command.startsWith("tsc")) {
++        return typecheckFilter(payload);
++    }
++    return genericFilter(payload);
+ }
++export function classifyTool(toolName) {
++    return toolName.startsWith("mcp__") ? "json" : "generic";
++}
+diff --git a/src/core/search_grouping.py b/src/core/search_grouping.py
+index 5555555..6666666 100644
+--- a/src/core/search_grouping.py
++++ b/src/core/search_grouping.py
+@@ -4,8 +4,18 @@ export function parseHeadingMode(lines) {
+-    return [];
++    const groups = [];
++    let current = null;
++    for (const line of lines) {
++        if (line.endsWith(":")) {
++            current = { path: line.slice(0, -1), lines: [] };
++            groups.push(current);
++            continue;
++        }
++        if (current) {
++            current.lines.push(line);
++        }
++    }
++    return groups;
+ }
+diff --git a/src/core/log_parser.py b/src/core/log_parser.py
+index 7777777..8888888 100644
+--- a/src/core/log_parser.py
++++ b/src/core/log_parser.py
+@@ -2,7 +2,17 @@ export function collapseLogs(lines) {
+-    return lines;
++    const output = [];
++    let repeated = 0;
++    for (const line of lines) {
++        if (line === "[INFO] polling status") {
++            repeated += 1;
++            if (repeated > 3) continue;
++        } else {
++            repeated = 0;
++        }
++        output.push(line);
++    }
++    return output;
+ }
+diff --git a/src/core/token_budget.py b/src/core/token_budget.py
+index 9999999..aaaaaaa 100644
+--- a/src/core/token_budget.py
++++ b/src/core/token_budget.py
+@@ -1,5 +1,12 @@
+ export function estimateTokens(text) {
+-    return Math.ceil(text.length / 4);
++    if (text.length === 0) {
++        return 0;
++    }
++    return Math.max(1, Math.ceil(text.length / 4));
+ }
++export function estimateRequest(messages, tools) {
++    return messages.reduce((sum, message) => sum + estimateTokens(message.content ?? ""), 0)
++        + estimateTokens(JSON.stringify(tools ?? []));
++}
+diff --git a/src/core/json_filter.py b/src/core/json_filter.py
+index bbbbbbb..ccccccc 100644
+--- a/src/core/json_filter.py
++++ b/src/core/json_filter.py
+@@ -12,6 +12,20 @@ export function compressJson(input) {
+-    return input;
++    const parsed = JSON.parse(input);
++    return JSON.stringify(
++        {
++            metadata: parsed.metadata,
++            files: parsed.files.slice(0, 5).map((file) => ({
++                path: file.path,
++                summary: file.summary,
++                diagnostics: file.diagnostics.slice(0, 3),
++            })),
++        },
++        null,
++        2,
++    );
+ }
++export function hasJsonPrefix(input) {
++    return input.trim().startsWith("{") || input.trim().startsWith("[");
++}
+diff --git a/src/core/history_fold.py b/src/core/history_fold.py
+index ddddddd..eeeeeee 100644
+--- a/src/core/history_fold.py
++++ b/src/core/history_fold.py
+@@ -8,7 +8,31 @@ export function maybeFold(history, ratio) {
+-    return { folded: false, history };
++    if (ratio < 0.5) {
++        return { folded: false, history };
++    }
++    const summary = {
++        role: "assistant",
++        content: "Summary of prior tool output, decisions, and user goals.",
++    };
++    return {
++        folded: true,
++        history: [summary, ...history.slice(-6)],
++    };
+ }
++export function compactToolResults(history) {
++    return history.map((entry) => {
++        if (entry.role !== "tool") return entry;
++        if ((entry.content ?? "").length < 5000) return entry;
++        return {
++            ...entry,
++            content: (entry.content ?? "").slice(0, 4000) + "\n[...truncated benchmark payload...]",
++        };
++    });
++}

@@ -15,6 +15,8 @@ class GenericFilterOptions:
 
 DEFAULT_OPTS = GenericFilterOptions()
 
+_TOOL_HEADER_PREFIXES = ("[exit", "[killed", "[job")
+
 
 def _collapse_blank_lines(lines: list[str]) -> list[str]:
     """Collapse runs of 2+ blank lines into a single blank line."""
@@ -30,13 +32,16 @@ def _collapse_blank_lines(lines: list[str]) -> list[str]:
 
 
 def _extract_header(lines: list[str]) -> tuple[list[str], list[str]]:
-    """Separate header lines (starting with '$ ' or '[') from the body."""
+    """Separate tool metadata header lines from the body."""
     header_end = 0
     for i, ln in enumerate(lines):
-        if ln.startswith("$ ") or ln.startswith("[") or ln == "":
+        if ln.startswith("$ ") or ln.startswith(_TOOL_HEADER_PREFIXES):
             header_end = i + 1
-        else:
-            break
+            continue
+        if ln == "" and header_end == i:
+            header_end = i + 1
+            continue
+        break
     return lines[:header_end], lines[header_end:]
 
 

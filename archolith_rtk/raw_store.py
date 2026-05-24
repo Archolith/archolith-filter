@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 DEFAULT_MAX_ENTRIES = 200
 DEFAULT_MAX_RAW_CHARS = 256_000

@@ -3,25 +3,30 @@
 import pytest
 
 from archolith_rtk import filter_output
-from archolith_rtk.classifier import classify_command, CommandCategory
-from archolith_rtk.config import FilterConfig, is_filter_enabled, is_verbose_command
-from archolith_rtk.strip_ansi import strip_ansi
-from archolith_rtk.raw_store import RawOutputStore, reset_raw_output_store
-from archolith_rtk.telemetry import reset_filter_telemetry_store, get_filter_telemetry_store
-from archolith_rtk.filter_meta import parse_result_meta, is_verbose_command as meta_is_verbose
-from archolith_rtk.filters.generic import generic_filter, GenericFilterOptions
+from archolith_rtk.classifier import CommandCategory, classify_command
+from archolith_rtk.config import (
+    FilterRiskLevel,
+    base_config_for_risk_level,
+    from_env,
+    is_verbose_command,
+)
+from archolith_rtk.filter_meta import parse_result_meta
+from archolith_rtk.filters.build_output import build_filter
+from archolith_rtk.filters.fs_listing import FsListingFilterOptions, fs_listing_filter
+from archolith_rtk.filters.generic import GenericFilterOptions, generic_filter
 from archolith_rtk.filters.git_diff import git_diff_filter
 from archolith_rtk.filters.git_log import git_log_filter
-from archolith_rtk.filters.git_status import git_status_filter
 from archolith_rtk.filters.git_show import git_show_filter
+from archolith_rtk.filters.git_status import git_status_filter
 from archolith_rtk.filters.json_output import json_filter
-from archolith_rtk.filters.fs_listing import fs_listing_filter
-from archolith_rtk.filters.search import search_filter
-from archolith_rtk.filters.test_run_output import filter_test_output
-from archolith_rtk.filters.build_output import build_filter
 from archolith_rtk.filters.lint_output import lint_filter
+from archolith_rtk.filters.logs import LogFilterOptions, log_filter
+from archolith_rtk.filters.search import SearchFilterOptions, search_filter
+from archolith_rtk.filters.test_run_output import filter_test_output
 from archolith_rtk.filters.typecheck_output import typecheck_filter
-from archolith_rtk.filters.logs import log_filter
+from archolith_rtk.raw_store import RawOutputStore, reset_raw_output_store
+from archolith_rtk.strip_ansi import strip_ansi
+from archolith_rtk.telemetry import get_filter_telemetry_store, reset_filter_telemetry_store
 
 
 @pytest.fixture(autouse=True)
@@ -124,6 +129,39 @@ class TestClassifier:
         assert r.category == CommandCategory.BUILD
 
 
+class TestFilterConfig:
+    def test_programmatic_risk_level_presets(self):
+        low = base_config_for_risk_level(FilterRiskLevel.LOW)
+        balanced = base_config_for_risk_level(FilterRiskLevel.BALANCED)
+        high = base_config_for_risk_level(FilterRiskLevel.HIGH)
+
+        assert low.risk_level == FilterRiskLevel.LOW
+        assert balanced.risk_level == FilterRiskLevel.BALANCED
+        assert high.risk_level == FilterRiskLevel.HIGH
+        assert low.generic_head > balanced.generic_head > high.generic_head
+        assert low.json_max_value_length > balanced.json_max_value_length > high.json_max_value_length
+
+    def test_env_risk_level_high_changes_defaults(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_RISK_LEVEL", "high")
+        cfg = from_env()
+        assert cfg.risk_level == FilterRiskLevel.HIGH
+        assert cfg.generic_head == 10
+        assert cfg.search_max_matches_per_file == 3
+
+    def test_invalid_env_risk_level_falls_back_to_balanced(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_RISK_LEVEL", "extreme")
+        cfg = from_env()
+        assert cfg.risk_level == FilterRiskLevel.BALANCED
+        assert cfg.generic_head == 20
+
+    def test_explicit_env_override_wins_over_risk_level(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_RISK_LEVEL", "high")
+        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_GENERIC_HEAD", "42")
+        cfg = from_env()
+        assert cfg.risk_level == FilterRiskLevel.HIGH
+        assert cfg.generic_head == 42
+
+
 # ─── generic filter ───
 
 
@@ -153,6 +191,12 @@ class TestGenericFilter:
         r = generic_filter(text, GenericFilterOptions(head_lines=5, tail_lines=5))
         assert "$ git diff" in r.output
 
+    def test_bracketed_log_lines_are_not_treated_as_header(self):
+        text = "\n".join(f"[INFO] line{i}" for i in range(120))
+        r = generic_filter(text, GenericFilterOptions(head_lines=5, tail_lines=5))
+        assert r.truncated
+        assert "[... 110 lines omitted ...]" in r.output
+
     def test_blank_collapse(self):
         text = "a\n\n\n\n\nb"
         r = generic_filter(text, GenericFilterOptions(head_lines=10, tail_lines=10))
@@ -175,12 +219,37 @@ class TestGitDiffFilter:
 
     def test_large_diff_truncates(self):
         stat_lines = ["src/foo.ts | 10 ++++----"]
-        diff_header = "diff --git a/src/foo.ts b/src/foo.ts\nindex abc..def 100644\n--- a/src/foo.ts\n+++ b/src/foo.ts\n@@ -1,1 +1,1 @@"
+        diff_header = (
+            "diff --git a/src/foo.ts b/src/foo.ts\n"
+            "index abc..def 100644\n"
+            "--- a/src/foo.ts\n"
+            "+++ b/src/foo.ts\n"
+            "@@ -1,1 +1,1 @@"
+        )
         diff_body = "\n".join(f"+line{i}" for i in range(200))
         text = "$ git diff\n[exit 0]\n" + "\n".join(stat_lines) + "\n" + diff_header + "\n" + diff_body
         r = git_diff_filter(text)
         assert r.truncated
         assert "diff --git" in r.output
+
+
+class TestGitShowFilter:
+    def test_short_show_no_truncation(self):
+        text = (
+            "$ git show HEAD\n[exit 0]\n"
+            "commit abc123\nAuthor: Test\nDate: Today\n\nmessage\n"
+            "diff --git a/src/foo.py b/src/foo.py\n"
+            "@@ -1,1 +1,1 @@\n-print('a')\n+print('b')"
+        )
+        r = git_show_filter(text)
+        assert not r.truncated
+
+    def test_commit_header_without_diff_falls_back_to_generic(self):
+        body = "\n".join(f"line{i}" for i in range(80))
+        text = "$ git show HEAD\n[exit 0]\ncommit abc123\nAuthor: Test\n\n" + body
+        r = git_show_filter(text)
+        assert r.truncated
+        assert "commit abc123" in r.output
 
 
 # ─── git-log filter ───
@@ -234,7 +303,7 @@ class TestJsonFilter:
 
     def test_invalid_json_falls_to_generic(self):
         text = "$ some-cmd\n[exit 0]\nnot valid json at all\n" + "line\n" * 100
-        r = json_filter(text)
+        json_filter(text)
         # Should not crash — falls through to generic
 
 
@@ -257,6 +326,56 @@ class TestSearchFilter:
         r = search_filter(text)
         assert r.truncated
 
+    def test_heading_mode_grouping_truncates_per_file(self):
+        file_a = "\n".join(f"{i}:pattern in a" for i in range(1, 8))
+        file_b = "\n".join(f"{i}:pattern in b" for i in range(1, 5))
+        text = f"$ rg --heading pattern\n[exit 0]\nsrc/a.py:\n{file_a}\n\nsrc/b.py:\n{file_b}"
+        r = search_filter(
+            text,
+            SearchFilterOptions(max_matches_per_file=3, max_files=1, head_lines=2, tail_lines=2),
+        )
+        assert r.truncated
+        assert "more matches in src/a.py" in r.output
+        assert "more files" in r.output
+
+    def test_heading_mode_paths_with_digits_stay_grouped(self):
+        file_a = "\n".join(f"{i}:pattern in a" for i in range(1, 5))
+        file_b = "\n".join(f"{i}:pattern in b" for i in range(1, 5))
+        text = f"$ rg --heading pattern\nsrc/v2/a.py\n{file_a}\n\nsrc/v3/b.py\n{file_b}"
+        r = search_filter(
+            text,
+            SearchFilterOptions(max_matches_per_file=2, max_files=1, head_lines=2, tail_lines=2),
+        )
+        assert r.truncated
+        assert "src/v2/a.py" in r.output
+        assert "more matches in src/v2/a.py" in r.output
+        assert "(unsorted)" not in r.output
+        assert "more files" in r.output
+
+    def test_heading_mode_preserves_group_heading_paths(self):
+        file_a = "\n".join(f"{i}:prompt_tokens in a" for i in range(1, 6))
+        file_b = "\n".join(f"{i}:prompt_tokens in b" for i in range(1, 6))
+        text = (
+            "$ rg --heading prompt_tokens src\n"
+            "src/v4/search/generated_4.py\n"
+            f"{file_a}\n\n"
+            "src/v5/search/generated_5.py\n"
+            f"{file_b}"
+        )
+        r = search_filter(
+            text,
+            SearchFilterOptions(max_matches_per_file=3, max_files=2, head_lines=2, tail_lines=2),
+        )
+        assert r.truncated
+        assert "src/v4/search/generated_4.py" in r.output
+        assert "src/v5/search/generated_5.py" in r.output
+
+    def test_non_match_output_falls_back_to_generic(self):
+        text = "$ rg pattern\n[exit 0]\nsummary line\nalpha line\nbeta line\ngamma line\ndelta line"
+        r = search_filter(text, SearchFilterOptions(head_lines=1, tail_lines=1))
+        assert r.truncated
+        assert "lines omitted" in r.output
+
 
 # ─── fs-listing filter ───
 
@@ -277,6 +396,30 @@ class TestFsListingFilter:
         r = fs_listing_filter(text)
         assert r.truncated
 
+    def test_tree_style_listing_delegates_to_generic(self):
+        tree_lines = "\n".join(
+            ["src"] + [f"├── child{i}" for i in range(40)] + ["└── final"]
+        )
+        text = "$ tree\n[exit 0]\n" + tree_lines
+        r = fs_listing_filter(text, FsListingFilterOptions(head_lines=5, tail_lines=5))
+        assert r.truncated
+        assert "entries omitted" not in r.output
+
+    def test_important_entries_and_errors_are_preserved(self):
+        entries = (
+            ["package.json", "README.md"]
+            + [f"dir{i}" for i in range(80)]
+            + ["ls: cannot access secret: Permission denied"]
+        )
+        text = "$ ls\n[exit 0]\n" + "\n".join(entries)
+        r = fs_listing_filter(
+            text,
+            FsListingFilterOptions(max_entries=10, head_lines=2, tail_lines=2),
+        )
+        assert r.truncated
+        assert "package.json" in r.output
+        assert "Permission denied" in r.output
+
 
 # ─── test/build/lint/typecheck filters ───
 
@@ -284,7 +427,7 @@ class TestFsListingFilter:
 class TestSimpleFilters:
     def test_test_filter_delegates(self):
         text = "$ pytest\n[exit 0]\n" + "\n".join(f"test_{i} PASSED" for i in range(100))
-        r = filter_test_output(text)
+        filter_test_output(text)
         # Should not crash — delegates to generic with test defaults
 
     def test_build_filter_delegates(self):
@@ -323,6 +466,15 @@ class TestLogFilter:
         r = log_filter(text)
         assert "ERROR" in r.output
 
+    def test_omitted_important_lines_get_promoted(self):
+        body_lines = [f"line {i}" for i in range(20)]
+        body_lines[10] = "WARNING: disk almost full"
+        text = "[job 1] background\n" + "\n".join(body_lines)
+        r = log_filter(text, LogFilterOptions(head_lines=2, tail_lines=2, max_consecutive_dupes=3))
+        assert r.truncated
+        assert "Important lines from omitted output" in r.output
+        assert "WARNING: disk almost full" in r.output
+
 
 # ─── filter_output (top-level API) ───
 
@@ -359,6 +511,59 @@ class TestFilterOutput:
         diff = "$ git diff\n[exit 0]\n" + "diff --git a/foo b/foo\n+added\n" * 80
         r = filter_output(diff, command="git diff")
         assert isinstance(r.output, str)
+
+    def test_risk_level_changes_compression_strength(self):
+        text = "$ echo\n[exit 0]\n" + "\n".join(f"line{i}" for i in range(200))
+        low = filter_output(text, command="echo", config=base_config_for_risk_level(FilterRiskLevel.LOW))
+        high = filter_output(text, command="echo", config=base_config_for_risk_level(FilterRiskLevel.HIGH))
+        assert low.truncated
+        assert high.truncated
+        assert high.filtered_chars < low.filtered_chars
+
+    def test_raw_output_tool_passthrough(self):
+        text = "x" * 2000
+        r = filter_output(text, tool="raw_output")
+        assert not r.truncated
+        assert r.output == text
+
+    def test_fallback_returns_stripped_text(self, monkeypatch):
+        text = "\x1b[31m" + ("x" * 2000) + "\x1b[0m"
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("broken")
+
+        monkeypatch.setattr("archolith_rtk._category_filter", boom)
+        r = filter_output(text, command="echo verbose")
+        assert not r.truncated
+        assert "\x1b" not in r.output
+        assert r.output == strip_ansi(text)
+
+
+class TestToolClassification:
+    def test_classify_passthrough_tool(self):
+        import archolith_rtk
+
+        assert archolith_rtk._classify_tool("raw_output", "payload") == "passthrough"
+
+    def test_classify_shell_tool(self):
+        import archolith_rtk
+
+        assert archolith_rtk._classify_tool("run_command", "payload") == "shell"
+
+    def test_classify_read_file_tool(self):
+        import archolith_rtk
+
+        assert archolith_rtk._classify_tool("read_file", "payload") == "generic"
+
+    def test_classify_mcp_json_tool(self):
+        import archolith_rtk
+
+        assert archolith_rtk._classify_tool("mcp__memory__query", '{"items": []}') == "json"
+
+    def test_classify_unknown_tool(self):
+        import archolith_rtk
+
+        assert archolith_rtk._classify_tool("custom_tool", "payload") == "generic"
 
 
 # ─── raw output store ───

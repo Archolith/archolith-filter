@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import FilterResult
-from .generic import generic_filter, GenericFilterOptions, _extract_header
-from .git_diff import git_diff_filter, GitDiffFilterOptions
+from .generic import GenericFilterOptions, _extract_header, generic_filter
+from .git_diff import GitDiffFilterOptions, git_diff_filter
 
 
 @dataclass(frozen=True)

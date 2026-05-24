@@ -30,7 +30,7 @@ Issues = "https://github.com/archolith/archolith-rtk/issues"
 
 [project.optional-dependencies]
 tokenizer = ["tiktoken>=0.7"]
-dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.5"]
+dev = ["pytest>=8", "pytest-benchmark>=5", "pytest-cov>=5", "ruff>=0.5"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["archolith_rtk"]

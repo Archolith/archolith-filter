@@ -4,21 +4,21 @@ import json
 
 import pytest
 
+from archolith_rtk import shrink_messages
 from archolith_rtk.shrink import (
     ChatMessage,
     ToolCall,
     ToolCallFunction,
+    _shrink_json_long_strings,
     count_tokens,
-    truncate_for_chars,
-    truncate_for_tokens,
-    shrink_oversized_tool_results,
-    shrink_oversized_tool_results_by_tokens,
-    shrink_oversized_tool_call_args_by_tokens,
     estimate_conversation_tokens,
     estimate_request_tokens,
-    _shrink_json_long_strings,
+    shrink_oversized_tool_call_args_by_tokens,
+    shrink_oversized_tool_results,
+    shrink_oversized_tool_results_by_tokens,
+    truncate_for_chars,
+    truncate_for_tokens,
 )
-
 
 # ─── count_tokens ───
 
@@ -148,6 +148,32 @@ class TestShrinkToolResultsTokens:
         result = shrink_oversized_tool_results_by_tokens(msgs, 100)
         assert result.healed_count == 1
         assert result.tokens_saved > 0
+
+
+class TestShrinkMessagesCompatibility:
+    def test_dict_messages_char_budget_roundtrip(self):
+        messages = [
+            {"role": "user", "content": "keep me"},
+            {"role": "tool", "content": "x" * 5000, "tool_call_id": "call_1", "name": "read_file"},
+        ]
+        result = shrink_messages(messages, max_chars=300)
+        assert isinstance(result[0], dict)
+        assert result[0]["content"] == "keep me"
+        assert "truncated" in result[1]["content"]
+
+    def test_chat_messages_token_budget_roundtrip(self):
+        messages = [
+            ChatMessage(role="tool", content="word " * 4000, tool_call_id="call_1", name="search"),
+        ]
+        result = shrink_messages(messages, max_tokens=100)
+        assert isinstance(result[0], ChatMessage)
+        assert "truncated" in result[0].content
+
+    def test_requires_exactly_one_budget(self):
+        with pytest.raises(ValueError):
+            shrink_messages([], max_chars=100, max_tokens=100)
+        with pytest.raises(ValueError):
+            shrink_messages([])
 
 
 # ─── shrink_oversized_tool_call_args_by_tokens ───

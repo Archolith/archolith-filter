@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import re
-
 from dataclasses import dataclass
 
 from . import FilterResult
-from .generic import generic_filter, GenericFilterOptions, _extract_header
+from .generic import GenericFilterOptions, _extract_header, generic_filter
 
 
 @dataclass(frozen=True)
@@ -22,15 +21,35 @@ DEFAULT_OPTS = SearchFilterOptions()
 
 
 class _FileGroup:
-    __slots__ = ("path", "lines")
+    __slots__ = ("path", "lines", "is_heading")
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, is_heading: bool = False) -> None:
         self.path = path
+        self.is_heading = is_heading
         self.lines: list[str] = []
 
 
 _INLINE_PATH_RE = re.compile(r"^([^:\s]+?):(\d+[:-])")
 _HEADING_PATH_RE = re.compile(r"^[^\s:][^\s]*[^\s:](?::?$)")
+_HEADING_MATCH_RE = re.compile(r"^\d+[:-]")
+
+
+def _next_non_blank_line(lines: list[str], start: int) -> str | None:
+    """Return the next non-blank line after ``start``."""
+    for line in lines[start:]:
+        if line.strip() != "":
+            return line
+    return None
+
+
+def _is_heading_path_line(line: str, next_non_blank: str | None) -> bool:
+    """Detect ``rg --heading`` path lines, including paths that contain digits."""
+    trimmed = line.strip()
+    if trimmed == "" or _INLINE_PATH_RE.match(trimmed):
+        return False
+    if trimmed.endswith(":"):
+        return True
+    return bool(next_non_blank and _HEADING_MATCH_RE.match(next_non_blank.strip()))
 
 
 def _group_by_file(body_lines: list[str]) -> list[_FileGroup]:
@@ -38,36 +57,39 @@ def _group_by_file(body_lines: list[str]) -> list[_FileGroup]:
     groups: list[_FileGroup] = []
     current_path = ""
     current_lines: list[str] = []
+    current_is_heading = False
 
-    for ln in body_lines:
+    def flush_current_group() -> None:
+        if current_path and current_lines:
+            group = _FileGroup(current_path, is_heading=current_is_heading)
+            group.lines = list(current_lines)
+            groups.append(group)
+
+    for index, ln in enumerate(body_lines):
         trimmed = ln.strip()
 
         if trimmed == "":
-            if current_path:
-                current_lines.append(ln)
             continue
 
         # Heading-mode path (rg --heading): line is just a path, possibly with trailing colon.
-        if _HEADING_PATH_RE.match(trimmed) and not _INLINE_PATH_RE.match(trimmed):
+        next_non_blank = _next_non_blank_line(body_lines, index + 1)
+        if _HEADING_PATH_RE.match(trimmed) and _is_heading_path_line(ln, next_non_blank):
             candidate_path = trimmed.rstrip(":")
-            if not re.search(r"\d", trimmed) or trimmed.endswith(":"):
-                if current_path and current_lines:
-                    groups.append(_FileGroup(current_path))
-                    groups[-1].lines = list(current_lines)
-                current_path = candidate_path
-                current_lines = []
-                continue
+            flush_current_group()
+            current_path = candidate_path
+            current_lines = []
+            current_is_heading = True
+            continue
 
         # Inline path:number:content
         inline_match = _INLINE_PATH_RE.match(trimmed)
         if inline_match:
             file_path = inline_match.group(1)
             if file_path != current_path:
-                if current_path and current_lines:
-                    groups.append(_FileGroup(current_path))
-                    groups[-1].lines = list(current_lines)
+                flush_current_group()
                 current_path = file_path
                 current_lines = [ln]
+                current_is_heading = False
             else:
                 current_lines.append(ln)
             continue
@@ -78,10 +100,9 @@ def _group_by_file(body_lines: list[str]) -> list[_FileGroup]:
         else:
             current_path = "(unsorted)"
             current_lines = [ln]
+            current_is_heading = False
 
-    if current_path and current_lines:
-        groups.append(_FileGroup(current_path))
-        groups[-1].lines = list(current_lines)
+    flush_current_group()
 
     return groups
 
@@ -111,12 +132,19 @@ def search_filter(formatted: str, opts: SearchFilterOptions | None = None) -> Fi
     if not body:
         return FilterResult(output=formatted, raw_chars=raw_chars, filtered_chars=raw_chars, truncated=False)
 
-    # Check for search-pattern lines (path:lineNumber:content).
+    # Check for inline search-pattern lines (path:lineNumber:content) or
+    # heading-mode output (rg --heading).
     has_search_pattern = any(
         ln.strip() != "" and re.search(r"[^:\s]+:\d+[:-]", ln) for ln in body
     )
+    has_heading_mode = any(
+        _HEADING_PATH_RE.match(ln.strip())
+        and _is_heading_path_line(ln, _next_non_blank_line(body, index + 1))
+        for index, ln in enumerate(body)
+        if ln.strip() != ""
+    )
 
-    if not has_search_pattern:
+    if not has_search_pattern and not has_heading_mode:
         non_blank = [ln for ln in body if ln.strip() != ""]
         if len(non_blank) <= 3:
             return FilterResult(
@@ -148,6 +176,8 @@ def search_filter(formatted: str, opts: SearchFilterOptions | None = None) -> Fi
     for i, compressed in enumerate(compressed_groups):
         if i > 0 and groups[i].path != groups[i - 1].path:
             parts.append("")
+        if groups[i].is_heading:
+            parts.append(groups[i].path)
         parts.extend(compressed)
 
     if len(groups) > opts.max_files:

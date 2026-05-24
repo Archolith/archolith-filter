@@ -1,0 +1,24 @@
+$ rg --heading prompt_tokens src
+src/v2/context/fold_manager.py
+14:const prompt_tokens = usage.prompt_tokens;
+18:if (prompt_tokens > foldThreshold) {
+22:  summary.push(prompt_tokens);
+29:  history.push({ prompt_tokens, kind: "fold" });
+
+src/v2/context/history_router.py
+9:const prompt_tokens = computeTokens(payload);
+11:routeByBudget(prompt_tokens, payload);
+17:if (prompt_tokens > aggressiveThreshold) {
+24:logger.info("prompt_tokens reached threshold");
+
+src/v3/search/path_grouping.py
+5:export function groupByPath(lines) {
+12:  current.path = "src/v3/search/path_grouping.py";
+16:  groups.push(current);
+22:  return groups;
+
+src/v3/search/path_grouping.test.py
+7:expect(groups[0].path).toBe("src/v3/search/path_grouping.py");
+12:expect(groups[1].lines.length).toBeGreaterThan(0);
+19:expect(groups[1].path).toContain("v3");
+23:expect(output).toMatch("prompt_tokens");

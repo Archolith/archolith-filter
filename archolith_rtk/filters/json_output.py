@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
-
 from dataclasses import dataclass
 
 from . import FilterResult
-from .generic import generic_filter, _extract_header
+from .generic import generic_filter
 
 
 @dataclass(frozen=True)
@@ -71,7 +70,8 @@ def _compress_value(value: object, depth: int, opts: JsonFilterOptions) -> str:
             entries.append(f"{'  ' * (depth + 1)}... +{omitted_keys} more keys: [{remaining}]")
 
         close_brace = "  " * depth + "}"
-        return f"{{\n{',\\n'.join(entries)}\n{close_brace}"
+        joined_entries = ",\n".join(entries)
+        return f"{{\n{joined_entries}\n{close_brace}"
 
     return str(value)
 

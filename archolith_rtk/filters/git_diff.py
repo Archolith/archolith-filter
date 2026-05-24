@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import FilterResult
-from .generic import generic_filter, GenericFilterOptions, _extract_header
+from .generic import _extract_header, generic_filter
 
 
 @dataclass(frozen=True)

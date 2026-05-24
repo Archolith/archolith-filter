@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import re
-
 from dataclasses import dataclass
 
 from . import FilterResult
-from .generic import generic_filter, _extract_header
 
 
 @dataclass(frozen=True)

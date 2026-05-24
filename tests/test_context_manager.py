@@ -1,20 +1,11 @@
-"""Tests for archolith_rtk -- Layer 3 context manager."""
-
-import pytest
-
-from archolith_rtk.shrink import ChatMessage
 from archolith_rtk.context_manager import (
+    DEFAULT_CONTEXT_TOKENS,
     ContextManager,
     PostUsageKind,
     get_context_limit,
     simple_extractive_summarizer,
-    HISTORY_FOLD_THRESHOLD,
-    HISTORY_FOLD_AGGRESSIVE_THRESHOLD,
-    FORCE_SUMMARY_THRESHOLD,
-    PREFLIGHT_EMERGENCY_THRESHOLD,
-    DEFAULT_CONTEXT_TOKENS,
 )
-
+from archolith_rtk.shrink import ChatMessage
 
 # --- get_context_limit ---
 
@@ -94,6 +85,12 @@ class TestDecideAfterUsage:
         assert d.kind == PostUsageKind.FOLD
         assert d.ctx_max == 128000
 
+    def test_decide_after_turn_alias_accepts_messages(self):
+        msgs = [ChatMessage(role="user", content="hello")]
+        d = self.cm.decide_after_turn(msgs, prompt_tokens=55000)
+        assert d.kind == PostUsageKind.FOLD
+        assert d.tail_budget == int(100000 * 0.2)
+
 
 # --- decide_preflight ---
 
@@ -140,10 +137,18 @@ class TestFold:
         for i in range(20):
             msgs.append(ChatMessage(role="user", content=f"User message {i} with enough text " * 50))
             msgs.append(ChatMessage(role="assistant", content=f"Response {i} with enough text " * 50))
-            msgs.append(ChatMessage(role="tool", content=f"Tool output {i} with enough text " * 100, tool_call_id=str(i)))
+            msgs.append(
+                ChatMessage(
+                    role="tool",
+                    content=f"Tool output {i} with enough text " * 100,
+                    tool_call_id=str(i),
+                )
+            )
         r = cm.fold(msgs, keep_recent_tokens=500)
-        # May or may not fold depending on token budget, but should not crash
-        assert isinstance(r, object)
+        assert r.folded
+        assert len(msgs) == r.after_messages
+        assert msgs[0].role == "assistant"
+        assert "CONVERSATION HISTORY SUMMARY" in (msgs[0].content or "")
 
     def test_fold_with_custom_summarizer(self):
         call_count = 0

@@ -6,11 +6,11 @@ Maps shell command strings to one of 13 filter categories.
 from __future__ import annotations
 
 import re
-from enum import Enum
 from dataclasses import dataclass
+from enum import StrEnum
 
 
-class CommandCategory(str, Enum):
+class CommandCategory(StrEnum):
     """Filter categories for shell output."""
 
     GIT_STATUS = "git-status"

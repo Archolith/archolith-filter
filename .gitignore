@@ -11,3 +11,8 @@ build/
 htmlcov/
 .ruff_cache/
 .mypy_cache/
+TASK-*.md
+logs/
+benchmarks/results/*.json
+benchmarks/results/*.md
+!benchmarks/results/.gitkeep

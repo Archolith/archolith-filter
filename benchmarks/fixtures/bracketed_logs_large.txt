@@ -1,0 +1,53 @@
+[job 7] run_background: npm run dev
+[INFO] server boot sequence started
+[INFO] loading config
+[INFO] loading config
+[INFO] loading config
+[INFO] loading config
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[WARN] cache warmup taking longer than expected
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] local: http://127.0.0.1:3000
+[INFO] ready in 1488ms
+[INFO] background worker synced
+[INFO] background worker synced
+[INFO] background worker synced
+[INFO] background worker synced
+[ERROR] failed to refresh preview cache
+[INFO] retry scheduled for preview cache refresh
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
+[INFO] polling status
