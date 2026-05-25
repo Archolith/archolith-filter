@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import ceil
 
 from . import FilterResult
 from .generic import _extract_header, generic_filter
@@ -15,6 +16,24 @@ class GitDiffFilterOptions:
 
 
 DEFAULT_OPTS = GitDiffFilterOptions()
+
+_DIFF_HEADER_PREFIXES = (
+    "diff --git",
+    "diff --cc",
+    "index ",
+    "--- ",
+    "+++ ",
+    "@@",
+    "old mode",
+    "new mode",
+    "similarity index",
+    "rename from",
+    "rename to",
+    "copy from",
+    "copy to",
+    "deleted file mode",
+    "new file mode",
+)
 
 
 def _split_stat_and_diff(body: list[str]) -> tuple[list[str], list[str]]:
@@ -59,48 +78,62 @@ def _compress_diff_body(diff_lines: list[str], opts: GitDiffFilterOptions) -> li
             out.extend(section)
             continue
 
-        # Keep header lines (diff --git, index, ---, +++, @@ ...) then head.
         header_lines: list[str] = []
         body_start = 0
         for i, ln in enumerate(section):
-            if (
-                ln.startswith("diff --git")
-                or ln.startswith("diff --cc")
-                or ln.startswith("index ")
-                or ln.startswith("--- ")
-                or ln.startswith("+++ ")
-                or ln.startswith("@@")
-                or ln.startswith("old mode")
-                or ln.startswith("new mode")
-                or ln.startswith("similarity index")
-                or ln.startswith("rename from")
-                or ln.startswith("rename to")
-                or ln.startswith("copy from")
-                or ln.startswith("copy to")
-            ):
+            if ln.startswith(_DIFF_HEADER_PREFIXES):
                 header_lines.append(ln)
                 body_start = i + 1
             else:
                 break
 
         section_body = section[body_start:]
-        head_count = max(0, opts.file_head_lines - len(header_lines))
-        if len(section_body) <= head_count:
+        if len(section_body) <= 3:
+            out.extend(section)
+            continue
+
+        preview = _select_preview_lines(section_body, opts.file_head_lines)
+        omitted = len(section_body) - len(preview)
+        if omitted <= 0:
             out.extend(section)
         else:
-            head = section_body[:head_count]
-            omitted = len(section_body) - head_count
             out.extend(header_lines)
-            out.extend(head)
+            out.extend(preview)
             out.extend(["", f"[... {omitted} lines omitted in this file ...]", ""])
 
-    # Append tail from the very end of the entire diff body.
-    if opts.tail_lines > 0 and len(diff_lines) > opts.file_head_lines:
-        tail = diff_lines[-opts.tail_lines :]
-        if out and tail and out[-1] != tail[0]:
-            out.extend(["", "--- tail ---"] + tail)
-
     return out
+
+
+def _select_preview_lines(section_body: list[str], file_head_lines: int) -> list[str]:
+    """Select a compact representative preview from a file diff body.
+
+    Prefer changed lines over surrounding context and keep a small head/tail
+    sample so the preview shows both the start and end of the file's changes.
+    """
+    signal_positions = [
+        index
+        for index, line in enumerate(section_body)
+        if (line.startswith("+") or line.startswith("-")) and not line.startswith(("+++", "---"))
+    ]
+
+    if not signal_positions:
+        preview_budget = max(2, min(4, ceil(file_head_lines / 5)))
+        if len(section_body) <= preview_budget:
+            return section_body
+        head_keep = max(1, preview_budget - 1)
+        keep_positions = list(range(head_keep))
+        keep_positions.append(len(section_body) - 1)
+        return [section_body[index] for index in sorted(set(keep_positions))]
+
+    preview_budget = max(2, min(5, ceil(file_head_lines / 5)))
+    head_keep = max(1, preview_budget - 1)
+    tail_keep = 1 if len(signal_positions) > head_keep else 0
+
+    keep_positions = signal_positions[:head_keep]
+    if tail_keep:
+        keep_positions.extend(signal_positions[-tail_keep:])
+
+    return [section_body[index] for index in sorted(set(keep_positions))]
 
 
 def git_diff_filter(formatted: str, opts: GitDiffFilterOptions | None = None) -> FilterResult:

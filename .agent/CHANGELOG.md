@@ -1,5 +1,23 @@
 # Changelog — archolith-rtk
 
+## 2026-05-25 — deepened read_file compression
+
+- Replaced the lightweight `read_file` filter with a more aggressive structure-aware pass that collapses generated/minified blobs, large literal fixtures, embedded JSON, multiline strings, and SVG-heavy blocks while preserving declarations and nearby anchors.
+- Extended `FilterConfig`, tests, and practical benchmark corpora/reporting to cover code, CSS, and fixture-heavy `read_file` scenarios.
+- Kept the package positioned as a two-layer RTK by merging the delegated `read_file` work without reintroducing the removed Layer 3 docs or benchmark surface.
+
+## 2026-05-24 — strengthened git diff compression
+
+- Reworked `git_diff_filter()` to stop re-inflating compressed output with a redundant whole-diff tail.
+- Switched large per-file diff previews to compact representative changed-line sampling while preserving structural diff headers.
+- Added regressions covering multi-file preview retention and reran the practical benchmark report, raising `filter_git_diff` savings from roughly `5%` to `45-50%` on the benchmark corpus.
+
+## 2026-05-24 — removed Layer 3 suite surface from RTK
+
+- Removed `context_manager.py` and its public exports so `archolith-rtk` now owns only Layer 1 filtering, Layer 2 shrinking, and shared token/truncation primitives.
+- Removed Layer 3 tests and benchmark coverage, including the context-fold scenario from the practical benchmark report.
+- Updated README, root changelog, and agent docs to describe `archolith-context` as the owner of conversation-level context strategy.
+
 ## 2026-05-24 — fixed heading-mode search calibration for practical risk benchmarks
 
 - Preserved heading-mode search path lines in `search_filter()` output so grouped `rg --heading` results keep the file headings users need for review and benchmark retention checks.

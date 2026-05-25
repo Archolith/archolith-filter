@@ -14,13 +14,14 @@ from archolith_rtk.filter_meta import parse_result_meta
 from archolith_rtk.filters.build_output import build_filter
 from archolith_rtk.filters.fs_listing import FsListingFilterOptions, fs_listing_filter
 from archolith_rtk.filters.generic import GenericFilterOptions, generic_filter
-from archolith_rtk.filters.git_diff import git_diff_filter
+from archolith_rtk.filters.git_diff import GitDiffFilterOptions, git_diff_filter
 from archolith_rtk.filters.git_log import git_log_filter
 from archolith_rtk.filters.git_show import git_show_filter
 from archolith_rtk.filters.git_status import git_status_filter
 from archolith_rtk.filters.json_output import json_filter
 from archolith_rtk.filters.lint_output import lint_filter
 from archolith_rtk.filters.logs import LogFilterOptions, log_filter
+from archolith_rtk.filters.read_file import ReadFileFilterOptions, read_file_filter
 from archolith_rtk.filters.search import SearchFilterOptions, search_filter
 from archolith_rtk.filters.test_run_output import filter_test_output
 from archolith_rtk.filters.typecheck_output import typecheck_filter
@@ -231,6 +232,37 @@ class TestGitDiffFilter:
         r = git_diff_filter(text)
         assert r.truncated
         assert "diff --git" in r.output
+        assert "[... " in r.output
+        assert r.filtered_chars < r.raw_chars
+
+    def test_large_diff_keeps_compact_per_file_preview_without_global_tail(self):
+        stat_lines = ["src/foo.ts | 20 ++++++++++----------", "src/bar.ts | 20 ++++++++++----------"]
+        file_a = (
+            "diff --git a/src/foo.ts b/src/foo.ts\n"
+            "index aaa..bbb 100644\n"
+            "--- a/src/foo.ts\n"
+            "+++ b/src/foo.ts\n"
+            "@@ -1,4 +1,8 @@\n"
+            + "\n".join(f"+foo_line_{i}" for i in range(12))
+        )
+        file_b = (
+            "diff --git a/src/bar.ts b/src/bar.ts\n"
+            "index ccc..ddd 100644\n"
+            "--- a/src/bar.ts\n"
+            "+++ b/src/bar.ts\n"
+            "@@ -10,4 +10,8 @@\n"
+            + "\n".join(f"+bar_line_{i}" for i in range(12))
+        )
+        text = "$ git diff\n[exit 0]\n" + "\n".join(stat_lines) + "\n" + file_a + "\n" + file_b
+        r = git_diff_filter(text, GitDiffFilterOptions(file_head_lines=5, tail_lines=5))
+        assert r.truncated
+        assert "diff --git a/src/foo.ts b/src/foo.ts" in r.output
+        assert "diff --git a/src/bar.ts b/src/bar.ts" in r.output
+        assert "--- tail ---" not in r.output
+        assert "+foo_line_0" in r.output
+        assert "+foo_line_11" in r.output
+        assert "+bar_line_0" in r.output
+        assert "+bar_line_11" in r.output
 
 
 class TestGitShowFilter:
@@ -476,6 +508,123 @@ class TestLogFilter:
         assert "WARNING: disk almost full" in r.output
 
 
+# ─── read_file filter ───
+
+
+class TestReadFileFilter:
+    def test_empty(self):
+        r = read_file_filter("")
+        assert r.output == ""
+        assert not r.truncated
+
+    def test_small_code_no_truncation(self):
+        text = "def hello():\n    print('hi')\n"
+        r = read_file_filter(text)
+        assert not r.truncated
+        assert "def hello():" in r.output
+
+    def test_import_collapse(self):
+        lines = ["import os"] + [f"import module{i}" for i in range(20)]
+        text = "\n".join(lines)
+        r = read_file_filter(text, ReadFileFilterOptions(import_collapse=True))
+        assert r.truncated
+        assert "import os" in r.output
+        assert "import lines omitted" in r.output
+        assert "import module1" not in r.output
+
+    def test_import_collapse_disabled(self):
+        lines = ["import os"] + [f"import module{i}" for i in range(20)]
+        text = "\n".join(lines)
+        r = read_file_filter(text, ReadFileFilterOptions(import_collapse=False))
+        assert not r.truncated
+        assert "import module19" in r.output
+
+    def test_comment_collapse(self):
+        lines = ["# Main module"] + [f"# comment line {i}" for i in range(20)]
+        text = "\n".join(lines)
+        r = read_file_filter(text, ReadFileFilterOptions(comment_threshold=5))
+        assert r.truncated
+        assert "# Main module" in r.output
+        assert "comment lines omitted" in r.output
+
+    def test_block_comment_collapse(self):
+        lines = ["/**"] + [f" * line {i}" for i in range(15)] + [" */"]
+        text = "\n".join(lines)
+        r = read_file_filter(text, ReadFileFilterOptions(comment_threshold=5))
+        assert r.truncated
+        assert "/**" in r.output
+        assert "comment lines omitted" in r.output
+
+    def test_blank_line_collapse(self):
+        text = "a\n\n\n\n\nb"
+        r = read_file_filter(text, ReadFileFilterOptions(blank_line_max=1))
+        assert r.truncated
+        assert "\n\n\n" not in r.output
+
+    def test_css_rule_collapse(self):
+        css = ".big-class {\n" + "\n".join(f"  prop{i}: value{i};" for i in range(20)) + "\n}"
+        r = read_file_filter(css, ReadFileFilterOptions(css_rule_collapse=True))
+        assert r.truncated
+        assert ".big-class {" in r.output
+        assert "CSS body lines omitted" in r.output
+
+    def test_declaration_preserved(self):
+        lines = ["import os"] + [f"import mod{i}" for i in range(20)]
+        lines.extend(["", "class MyService:", "    def process(self):", "        pass"])
+        text = "\n".join(lines)
+        r = read_file_filter(text, ReadFileFilterOptions(import_collapse=True, blank_line_max=1))
+        assert "class MyService:" in r.output
+        assert "def process(self):" in r.output
+
+    def test_multiline_string_start_detected(self):
+        lines = ['"""Multi-line'] + [f"content line {i}" for i in range(10)] + ['"""', "", "class Bar:", "    pass"]
+        text = "\n".join(lines)
+        r = read_file_filter(text, ReadFileFilterOptions(literal_threshold=5))
+        assert "class Bar:" in r.output
+        assert "lines omitted" in r.output
+
+    def test_type_annotated_dict_literal(self):
+        icon_lines = [f'    "icon-{i}": "<svg>path{i}</svg>",' for i in range(20)]
+        lines = ["ICONS: dict[str, str] = {"] + icon_lines + ["}", "", "class ServiceClient:", "    pass"]
+        text = "\n".join(lines)
+        r = read_file_filter(text, ReadFileFilterOptions(literal_threshold=5))
+        assert "class ServiceClient:" in r.output
+
+    def test_generated_block_collapse(self):
+        generated_lines = [("x" * 600) + f"; // generated line {i}" for i in range(8)]
+        text = "\n".join(generated_lines + ["", "class ServiceClient:", "    pass"])
+        r = read_file_filter(
+            text,
+            ReadFileFilterOptions(generated_min_line_len=500, generated_min_run=5),
+        )
+        assert "generated lines omitted" in r.output
+        assert "class ServiceClient:" in r.output
+
+    def test_svg_fixture_collapse(self):
+        path_cmds = " ".join(f"M{i},{i} L{i + 1},{i + 2}" for i in range(30))
+        svg_lines = [
+            "<svg viewBox=\"0 0 24 24\">",
+            f"  <path d=\"{path_cmds}\"/>",
+            "  <path d=\"M0 0 L10 10\"/>",
+            "  <path d=\"M1 1 L11 11\"/>",
+            "  <path d=\"M2 2 L12 12\"/>",
+            "  <path d=\"M3 3 L13 13\"/>",
+            "  <path d=\"M4 4 L14 14\"/>",
+            "</svg>",
+        ]
+        text = "\n".join(svg_lines + ["", "class IconRegistry:", "    pass"])
+        r = read_file_filter(text)
+        assert "SVG path/body lines omitted" in r.output
+        assert "class IconRegistry:" in r.output
+
+    def test_filter_output_routes_read_file_tool(self):
+        lines = ["import os"] + [f"import mod{i}" for i in range(20)]
+        padding = "\n".join(f"x = {i}" for i in range(30))
+        text = "\n".join(lines) + "\n" + padding
+        r = filter_output(text, tool="read_file")
+        assert "import lines omitted" in r.output or not r.truncated
+
+
 # ─── filter_output (top-level API) ───
 
 
@@ -553,7 +702,7 @@ class TestToolClassification:
     def test_classify_read_file_tool(self):
         import archolith_rtk
 
-        assert archolith_rtk._classify_tool("read_file", "payload") == "generic"
+        assert archolith_rtk._classify_tool("read_file", "payload") == "read_file"
 
     def test_classify_mcp_json_tool(self):
         import archolith_rtk

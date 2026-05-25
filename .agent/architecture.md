@@ -2,15 +2,14 @@
 
 ## Overview
 
-archolith-rtk is a deterministic Token Reduction Toolkit for LLM agent contexts. It compresses tool output, truncates oversized conversation messages, and manages context window thresholds — all without requiring LLM calls (though an optional summarizer callback is supported for Layer 3).
+archolith-rtk is a deterministic Token Reduction Toolkit for LLM agent contexts. It compresses tool output and truncates oversized conversation messages without requiring LLM calls.
 
-The library is organized as three sequential layers:
+The library is organized as two sequential layers:
 
-1. **Layer 1 — Output Filters**: Compress tool results before they enter the model context. 13 category-specific filters route based on the shell command that produced the output.
+1. **Layer 1 — Output Filters**: Compress tool results before they enter the model context. 13 shell-command categories plus tool-routed `read_file` compression decide which filter strategy to apply.
 2. **Layer 2 — Shrink**: Truncate oversized tool-role messages in conversation history. Supports both char-based and token-based budgets.
-3. **Layer 3 — Context Manager**: Threshold-based conversation folding that decides when and how aggressively to compress history.
 
-All three layers are deterministic by default. Layer 3 supports an optional LLM-backed summarizer via an injected callback.
+Both layers are deterministic by default.
 
 ## Tech Stack
 
@@ -41,12 +40,6 @@ Tool output text
   ├── count_tokens()       →  tiktoken or heuristic
   ├── truncate_for_chars() / truncate_for_tokens()
   └── ShrinkCharsResult / ShrinkTokensResult
-       │
-       ▼
-  ContextManager           ← Layer 3
-  ├── decide_after_usage() →  PostUsageDecision (none / fold / exit)
-  ├── fold()               →  replaces old turns with summary message
-  └── emergency_compact()  →  in-place truncation at >95% usage
 ```
 
 ## Key Components
@@ -74,6 +67,7 @@ Tool output text
 | `json_output.py` | json | Recursive value compression, depth/key/array capping |
 | `logs.py` | logs | Duplicate-run collapse, important-line preservation |
 | `generic.py` | generic | Head+tail windowing, blank collapse, header extraction |
+| `read_file.py` | read_file | Structure-aware file-content compression for imports, comments, CSS, literals, and generated blobs |
 
 ### Layer 1 — config.py
 
@@ -93,20 +87,6 @@ Truncation primitives:
 - `truncate_for_tokens()` — iterative convergence via `_size_prefix_to_tokens()` / `_size_suffix_to_tokens()` (never tokenizes full input)
 
 Token counting: `count_tokens()` uses tiktoken `cl100k_base` if available, else divides by 4.
-
-### Layer 3 — context_manager.py
-
-`ContextManager` with threshold-based decision logic:
-
-| Usage Ratio | Action | Tail Budget |
-|-------------|--------|-------------|
-| < 50% | None | — |
-| 50–70% | Normal fold | 20% of ctx_max |
-| 70–80% | Aggressive fold | 10% of ctx_max |
-| 80–95% | Exit with summary | — |
-| > 95% | Emergency compact | — |
-
-Built-in context limits for 16 models via `get_context_limit()`. Default summarizer is `simple_extractive_summarizer()` — deterministic, no LLM calls. Custom summarizer injected via constructor.
 
 ### Supporting modules
 
@@ -153,6 +133,13 @@ All env vars use the prefix `ARCHOLITH_RTK_FILTER_`:
 | `ARCHOLITH_RTK_FILTER_JSON_MAX_ARRAY` | Max JSON array items | 5 |
 | `ARCHOLITH_RTK_FILTER_JSON_MAX_DEPTH` | Max JSON recursion depth | 3 |
 | `ARCHOLITH_RTK_FILTER_JSON_MAX_VALUE_LEN` | Max JSON value length | 80 |
+| `ARCHOLITH_RTK_FILTER_READ_IMPORTS_COLLAPSE` | Collapse large import blocks | 1 |
+| `ARCHOLITH_RTK_FILTER_READ_BLANK_LINE_MAX` | Max consecutive blank lines kept in `read_file` output | 1 |
+| `ARCHOLITH_RTK_FILTER_READ_COMMENT_THRESHOLD` | Comment-run collapse threshold for `read_file` output | 10 |
+| `ARCHOLITH_RTK_FILTER_READ_CSS_RULE_COLLAPSE` | Collapse verbose CSS rule bodies | 1 |
+| `ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_LINE_LEN` | Long-line threshold for generated/minified block collapse | 500 |
+| `ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_RUN` | Consecutive long lines required before collapsing generated/minified blocks | 5 |
+| `ARCHOLITH_RTK_FILTER_READ_LITERAL_THRESHOLD` | Collapse threshold for multiline strings and large literal blocks | 8 |
 
 All numeric values are clamped to upper bounds (lines: 500, entries: 1000, depth: 10, value length: 10000).
 
@@ -164,5 +151,5 @@ Risk-level presets adjust multiple thresholds together:
 
 ## External Dependencies
 
-- **tiktoken** (optional): Provides accurate token counting for Layer 2 shrink and Layer 3 context management. Without it, falls back to heuristic of ~4 chars/token. Install via `archolith-rtk[tokenizer]`.
+- **tiktoken** (optional): Provides accurate token counting for Layer 2 shrink. Without it, falls back to heuristic of ~4 chars/token. Install via `archolith-rtk[tokenizer]`.
 - No other external dependencies — the library is zero-dependency by default.

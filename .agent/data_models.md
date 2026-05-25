@@ -59,6 +59,9 @@ class FilterConfig:
     read_blank_line_max: int = 1
     read_comment_threshold: int = 10
     read_css_rule_collapse: bool = True
+    read_generated_min_line_len: int = 500
+    read_generated_min_run: int = 5
+    read_literal_threshold: int = 8
 ```
 
 ### FilterRiskLevel (`config.py`)
@@ -72,6 +75,23 @@ class FilterRiskLevel(str, Enum):
 
 Used to choose a preset compression posture before applying explicit env-var or
 programmatic overrides.
+
+### ReadFileFilterOptions (`filters/read_file.py`)
+
+```python
+@dataclass(frozen=True)
+class ReadFileFilterOptions:
+    import_collapse: bool = True
+    blank_line_max: int = 1
+    comment_threshold: int = 10
+    css_rule_collapse: bool = True
+    generated_min_line_len: int = 500
+    generated_min_run: int = 5
+    literal_threshold: int = 8
+```
+
+Used by the `read_file` Layer 1 tool filter to collapse low-value file bloat
+while preserving declarations and nearby navigation anchors.
 
 ### FilterMeta (`filter_meta.py`)
 
@@ -139,51 +159,6 @@ class ShrinkTokensResult:
     chars_saved: int      # Characters recovered
 ```
 
-## Layer 3 — Context Manager Models (`context_manager.py`)
-
-### PostUsageKind
-
-```python
-class PostUsageKind(str, Enum):
-    NONE = "none"
-    FOLD = "fold"
-    EXIT_WITH_SUMMARY = "exit-with-summary"
-```
-
-### PostUsageDecision
-
-```python
-@dataclass(frozen=True)
-class PostUsageDecision:
-    kind: PostUsageKind
-    prompt_tokens: int
-    ctx_max: int
-    ratio: float
-    tail_budget: int | None = None
-    aggressive: bool = False
-```
-
-### PreflightDecision
-
-```python
-@dataclass(frozen=True)
-class PreflightDecision:
-    needs_action: bool       # True if emergency compact needed
-    estimate_tokens: int
-    ctx_max: int
-```
-
-### FoldResult
-
-```python
-@dataclass(frozen=True)
-class FoldResult:
-    folded: bool             # Whether a fold actually happened
-    before_messages: int
-    after_messages: int
-    summary_chars: int
-```
-
 ## Raw Output Store (`raw_store.py`)
 
 ### RawOutputEntry
@@ -249,7 +224,10 @@ class FilterTelemetrySummary:
 | Enum | Location | Values |
 |------|----------|--------|
 | `CommandCategory` | `classifier.py` | 13 categories (see above) |
-| `PostUsageKind` | `context_manager.py` | `NONE`, `FOLD`, `EXIT_WITH_SUMMARY` |
+
+`read_file` is routed as a tool-specific category string in `archolith_rtk.__init__`,
+not as a `CommandCategory` enum value, because it is classified from tool name
+rather than from shell command text.
 
 ## Repository Reference
 

@@ -3,9 +3,9 @@
 Token Reduction Toolkit — deterministic output filtering for LLM agent contexts.
 
 A clean-room Python reimplementation of the RTK output filtering system from
-[reasonix](https://github.com/nicepkg/reasonix). Three layers of context
-reduction that operate on tool output, conversation history, and context window
-management.
+[reasonix](https://github.com/nicepkg/reasonix). Two layers of deterministic
+context reduction that operate on tool output and oversized conversation
+messages.
 
 Part of the Archolith suite.
 
@@ -26,16 +26,14 @@ pip install "archolith-rtk[tokenizer]"
 ```
 Layer 1: filter_output()     Compress tool results before model context
 Layer 2: shrink_messages()   Truncate oversized messages in conversation history
-Layer 3: ContextManager      Threshold-based conversation folding decisions
 ```
 
-All three layers are deterministic and require no LLM calls. Layer 3 supports
-optional LLM-backed summarization via an injected callback.
+Both layers are deterministic and require no LLM calls.
 
 ## Layer 1 — Output Filters
 
 Compress tool output before it enters the model context. Routes output through
-13 category-specific filters based on the command that produced it.
+13 shell-command categories plus tool-routed `read_file` compression.
 
 ```python
 from archolith_rtk import filter_output
@@ -68,6 +66,7 @@ print(result.truncated)      # whether compression occurred
 | `search` | `search_filter` | File grouping, per-file match capping |
 | `json` | `json_filter` | Recursive value compression, depth/key/array capping |
 | `logs` | `log_filter` | Duplicate-run collapse, important-line preservation |
+| `read_file` | `read_file_filter` | Structure-aware file compression for imports, comments, CSS, literals, and generated blobs |
 | generic | `generic_filter` | Head+tail windowing, blank collapse, header extraction |
 
 ### Bypass Rules
@@ -91,6 +90,7 @@ ARCHOLITH_RTK_FILTER_GIT_DIFF_FILE_HEAD=5    # Lines per file in diff stat
 ARCHOLITH_RTK_FILTER_GIT_DIFF_TAIL=50        # Diff body tail lines
 ARCHOLITH_RTK_FILTER_TEST_HEAD=10            # Test output head lines
 ARCHOLITH_RTK_FILTER_TEST_TAIL=40            # Test output tail lines
+ARCHOLITH_RTK_FILTER_READ_LITERAL_THRESHOLD=8  # Collapse large fixture/literal blocks
 ```
 
 `ARCHOLITH_RTK_FILTER_RISK_LEVEL` controls the default compression posture:
@@ -205,68 +205,17 @@ short = truncate_for_chars(huge_text, max_chars=5000)
 short = truncate_for_tokens(huge_text, max_tokens=2000)
 ```
 
-## Layer 3 — Context Manager
+## Suite Boundary
 
-Threshold-based conversation folding to keep conversations within context
-window limits.
+`archolith-rtk` is the deterministic hygiene layer of the Archolith suite:
 
-### Decision Logic
+- Layer 1: tool-output filtering
+- Layer 2: oversized message and tool-argument shrinking
+- shared primitives: token counting, truncation, raw-output recovery, telemetry
 
-| Usage Ratio | Action | Tail Budget |
-|-------------|--------|-------------|
-| < 50% | None | — |
-| 50-70% | Normal fold | 20% of ctx_max |
-| 70-80% | Aggressive fold | 10% of ctx_max |
-| 80-95% | Exit with summary | — |
-| > 95% | Emergency compact | — |
-
-```python
-from archolith_rtk import ContextManager, ChatMessage
-
-cm = ContextManager(ctx_max=128000)
-
-# After a turn's API response
-# decide_after_turn(...) is kept as a compatibility alias for older call sites.
-decision = cm.decide_after_turn(messages, prompt_tokens=65000)
-if decision.kind == "fold":
-    # Fold conversation history in place
-    result = cm.fold(messages, keep_recent_tokens=decision.tail_budget)
-
-# Before sending a request
-preflight = cm.decide_preflight(messages, tool_specs)
-if preflight.needs_action:
-    messages = cm.emergency_compact(messages)
-```
-
-### Model Context Sizes
-
-Built-in context limits for 16 known models:
-
-```python
-from archolith_rtk import get_context_limit
-
-limit = get_context_limit("gpt-4o")       # 128000
-limit = get_context_limit("deepseek-v3")   # 131072
-limit = get_context_limit("claude-3.5-sonnet")  # 200000
-limit = get_context_limit("gemini-2.5-pro")  # 1048576
-```
-
-### Custom Summarizer
-
-By default, the fold operation uses a deterministic extractive summarizer that
-extracts important lines (errors, decisions, file changes) without LLM calls.
-You can inject your own:
-
-```python
-def my_llm_summarizer(messages):
-    # Call your LLM here
-    return "Summary of the conversation..."
-
-cm = ContextManager(
-    ctx_max=128000,
-    summarizer=my_llm_summarizer,
-)
-```
+Conversation-level context strategy such as folding, graph assembly, curator
+selection, and emergency compaction belongs in
+`archolith-context`, not this package.
 
 ## Development
 
@@ -305,9 +254,8 @@ pytest benchmarks -v --benchmark-only --benchmark-json benchmarks/results/latest
 
 The benchmark suite covers:
 
-- Layer 1: `filter_output()` on git diff, heading-mode search, bracketed logs, and JSON payloads
+- Layer 1: `filter_output()` on git diff, heading-mode search, bracketed logs, JSON payloads, and `read_file` corpora
 - Layer 2: `shrink_messages()` and the lower-level shrink helpers
-- Layer 3: `ContextManager.fold()`, `decide_preflight()`, and `emergency_compact()`
 
 Fixture corpora live in `benchmarks/fixtures/`, and larger synthetic
 conversation histories are generated in `benchmarks/conftest.py`.
@@ -331,8 +279,8 @@ The practical report evaluates every Layer 1 filter scenario at all three
 - tokens before and after compression
 - tokens saved and savings percentage
 - median and p95 runtime per scenario
-- scenario-specific retention checks (e.g. preserving readiness lines,
-  JSON keys, and fold summary markers)
+- scenario-specific retention checks (e.g. preserving readiness lines and
+  JSON keys)
 - acceptance checks: preset ordering (high >= balanced >= low savings),
   minimum savings thresholds, and retention marker survival across presets
 

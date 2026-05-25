@@ -126,6 +126,15 @@ class TestShrinkToolResultsChars:
         result = shrink_oversized_tool_results(msgs, 1000)
         assert result.healed_count == 2
 
+    def test_read_file_tool_message_uses_generic_truncation(self):
+        code_lines = ["import os"] + [f"import mod{i}" for i in range(200)]
+        code_lines.extend(["", "def main():", "    pass"])
+        large_content = "\n".join(code_lines)
+        msgs = [ChatMessage(role="tool", content=large_content, tool_call_id="1", name="read_file")]
+        result = shrink_oversized_tool_results(msgs, 500)
+        assert result.healed_count == 1
+        assert "truncated" in result.messages[0].content
+
 
 # ─── shrink_oversized_tool_results_by_tokens ───
 

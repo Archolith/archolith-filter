@@ -7,7 +7,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from archolith_rtk import (
-    ContextManager,
     FilterRiskLevel,
     base_config_for_risk_level,
     count_tokens,
@@ -24,6 +23,9 @@ try:
         get_bracketed_logs_large_text,
         get_git_diff_large_text,
         get_nested_json_large_text,
+        get_read_file_code_text,
+        get_read_file_css_text,
+        get_read_file_fixture_heavy_text,
         get_search_heading_large_text,
     )
 except ModuleNotFoundError:
@@ -33,6 +35,9 @@ except ModuleNotFoundError:
         get_bracketed_logs_large_text,
         get_git_diff_large_text,
         get_nested_json_large_text,
+        get_read_file_code_text,
+        get_read_file_css_text,
+        get_read_file_fixture_heavy_text,
         get_search_heading_large_text,
     )
 
@@ -141,6 +146,39 @@ def _build_filter_scenarios() -> list[PracticalScenario]:
             ['"metadata"', '"files"', "[filtered"],
             [],
         ),
+        (
+            "filter_read_file",
+            lambda cfg: filter_output(
+                get_read_file_code_text(),
+                tool="read_file",
+                config=cfg,
+            ),
+            count_tokens(get_read_file_code_text()),
+            ["class RequestHandler:", "def process(self", "import lines omitted"],
+            [],
+        ),
+        (
+            "filter_read_file_css",
+            lambda cfg: filter_output(
+                get_read_file_css_text(),
+                tool="read_file",
+                config=cfg,
+            ),
+            count_tokens(get_read_file_css_text()),
+            ["#app-container", "CSS body lines omitted"],
+            [],
+        ),
+        (
+            "filter_read_file_fixture_heavy",
+            lambda cfg: filter_output(
+                get_read_file_fixture_heavy_text(),
+                tool="read_file",
+                config=cfg,
+            ),
+            count_tokens(get_read_file_fixture_heavy_text()),
+            ["class IconRegistry:", "class ServiceClient:", "lines omitted"],
+            [],
+        ),
     ]
 
     rows: list[PracticalScenario] = []
@@ -232,48 +270,6 @@ def _build_shrink_scenarios() -> list[PracticalScenario]:
     return rows
 
 
-def _build_context_scenarios() -> list[PracticalScenario]:
-    manager = ContextManager(ctx_max=128000)
-
-    def run_fold():
-        history = build_large_tool_history(18)
-        result = manager.fold(history, keep_recent_tokens=4000)
-        return result, history
-
-    before_tokens = _tokens_for_messages(build_large_tool_history(18))
-    (fold_result, folded_history), median_ms, p95_ms = _measure_call(run_fold)
-    after_tokens = _tokens_for_messages(folded_history)
-    checks: list[str] = []
-    if fold_result.folded:
-        checks.append("reported fold")
-    if folded_history and folded_history[0].role == "assistant":
-        checks.append("inserted summary message")
-    if folded_history and "CONVERSATION HISTORY SUMMARY" in (folded_history[0].content or ""):
-        checks.append("kept summary marker")
-    checks_passed = (
-        fold_result.folded
-        and bool(folded_history)
-        and folded_history[0].role == "assistant"
-        and "CONVERSATION HISTORY SUMMARY" in (folded_history[0].content or "")
-        and after_tokens < before_tokens
-    )
-    return [
-        PracticalScenario(
-            name="context_fold",
-            risk_level="n/a",
-            kind="context",
-            tokens_before=before_tokens,
-            tokens_after=after_tokens,
-            tokens_saved=max(0, before_tokens - after_tokens),
-            savings_pct=_pct_saved(before_tokens, after_tokens),
-            runtime_ms_median=median_ms,
-            runtime_ms_p95=p95_ms,
-            checks_passed=checks_passed,
-            checks=checks,
-        )
-    ]
-
-
 # ---------------------------------------------------------------------------
 # Preset-ordering and retention acceptance checks
 # ---------------------------------------------------------------------------
@@ -284,6 +280,9 @@ _SCENARIO_MIN_SAVINGS: dict[str, dict[str, float]] = {
     "filter_search_heading": {"low": 10.0, "balanced": 10.0, "high": 30.0},
     "filter_bracketed_logs": {"low": 10.0, "balanced": 20.0, "high": 30.0},
     "filter_json": {"low": 50.0, "balanced": 80.0, "high": 90.0},
+    "filter_read_file": {"low": 10.0, "balanced": 20.0, "high": 30.0},
+    "filter_read_file_css": {"low": 5.0, "balanced": 10.0, "high": 20.0},
+    "filter_read_file_fixture_heavy": {"low": 20.0, "balanced": 30.0, "high": 40.0},
 }
 _SCENARIO_RETENTION_MARKERS: dict[str, list[str]] = {
     "filter_git_diff": ["diff --git"],
@@ -293,6 +292,9 @@ _SCENARIO_RETENTION_MARKERS: dict[str, list[str]] = {
         "[ERROR] failed to refresh preview cache",
     ],
     "filter_json": ['"metadata"', '"files"'],
+    "filter_read_file": ["class RequestHandler:", "def process(self"],
+    "filter_read_file_css": ["#app-container"],
+    "filter_read_file_fixture_heavy": ["class IconRegistry:", "class ServiceClient:"],
 }
 
 
@@ -396,7 +398,7 @@ def _run_acceptance_checks(rows: list[PracticalScenario]) -> list[_AcceptanceChe
                         passed=True,
                     ))
 
-    # --- shrink / context scenarios: basic sanity ---
+    # --- shrink scenarios: basic sanity ---
     for row in rows:
         if row.kind != "filter":
             if not row.checks_passed:
@@ -456,7 +458,7 @@ def _render_markdown(rows: list[PracticalScenario], acceptance: list[_Acceptance
 
 def main() -> int:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    rows = _build_filter_scenarios() + _build_shrink_scenarios() + _build_context_scenarios()
+    rows = _build_filter_scenarios() + _build_shrink_scenarios()
     acceptance = _run_acceptance_checks(rows)
     all_passed = all(row.checks_passed for row in rows) and all(ac.passed for ac in acceptance)
 

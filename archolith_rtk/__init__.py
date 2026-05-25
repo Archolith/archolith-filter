@@ -1,12 +1,11 @@
 """Archolith RTK — Token Reduction Toolkit.
 
 Deterministic output filtering for LLM agent contexts.
-Three layers: output filters, shrink, context manager.
+Two layers: output filters and shrink.
 
 Public API:
     filter_output()  — Layer 1: compress tool results before model context
     shrink_messages() — Layer 2: truncate oversized messages in conversation history
-    ContextManager   — Layer 3: threshold-based conversation folding
 """
 
 from __future__ import annotations
@@ -22,21 +21,6 @@ from .config import (
     is_verbose_command,
     normalize_risk_level,
 )
-from .context_manager import (
-    DEFAULT_CONTEXT_TOKENS,
-    FORCE_SUMMARY_THRESHOLD,
-    HISTORY_FOLD_AGGRESSIVE_THRESHOLD,
-    HISTORY_FOLD_TAIL_FRACTION,
-    HISTORY_FOLD_THRESHOLD,
-    PREFLIGHT_EMERGENCY_THRESHOLD,
-    ContextManager,
-    FoldResult,
-    PostUsageDecision,
-    PostUsageKind,
-    PreflightDecision,
-    get_context_limit,
-    simple_extractive_summarizer,
-)
 from .filter_meta import FilterMeta, parse_result_meta
 from .filters import FilterResult
 from .filters.build_output import BuildFilterOptions, build_filter
@@ -49,6 +33,7 @@ from .filters.git_status import GitStatusFilterOptions, git_status_filter
 from .filters.json_output import JsonFilterOptions, json_filter
 from .filters.lint_output import LintFilterOptions, lint_filter
 from .filters.logs import LogFilterOptions, log_filter
+from .filters.read_file import ReadFileFilterOptions, read_file_filter
 from .filters.search import SearchFilterOptions, search_filter
 from .filters.test_run_output import TestFilterOptions, filter_test_output
 from .filters.typecheck_output import TypecheckFilterOptions, typecheck_filter
@@ -82,31 +67,21 @@ __all__ = [
     "ChatMessage",
     "ClassifiedCommand",
     "CommandCategory",
-    "ContextManager",
-    "DEFAULT_CONTEXT_TOKENS",
-    "FORCE_SUMMARY_THRESHOLD",
     "FilterConfig",
     "FilterRiskLevel",
     "FilterMeta",
     "FilterResult",
     "FilterTelemetrySummary",
-    "FoldResult",
     "FsListingFilterOptions",
     "GenericFilterOptions",
     "GitDiffFilterOptions",
     "GitLogFilterOptions",
     "GitShowFilterOptions",
     "GitStatusFilterOptions",
-    "HISTORY_FOLD_AGGRESSIVE_THRESHOLD",
-    "HISTORY_FOLD_TAIL_FRACTION",
-    "HISTORY_FOLD_THRESHOLD",
     "JsonFilterOptions",
     "LintFilterOptions",
     "LogFilterOptions",
-    "PREFLIGHT_EMERGENCY_THRESHOLD",
-    "PostUsageDecision",
-    "PostUsageKind",
-    "PreflightDecision",
+    "ReadFileFilterOptions",
     "RawOutputStore",
     "SearchFilterOptions",
     "ShrinkCharsResult",
@@ -126,7 +101,6 @@ __all__ = [
     "from_env",
     "fs_listing_filter",
     "generic_filter",
-    "get_context_limit",
     "get_filter_telemetry_store",
     "get_raw_output_store",
     "git_diff_filter",
@@ -140,6 +114,7 @@ __all__ = [
     "log_filter",
     "normalize_risk_level",
     "parse_result_meta",
+    "read_file_filter",
     "record_filter_telemetry_with_tokens",
     "reset_filter_telemetry_store",
     "reset_raw_output_store",
@@ -148,7 +123,6 @@ __all__ = [
     "shrink_oversized_tool_call_args_by_tokens",
     "shrink_oversized_tool_results",
     "shrink_oversized_tool_results_by_tokens",
-    "simple_extractive_summarizer",
     "truncate_for_chars",
     "truncate_for_tokens",
     "typecheck_filter",
@@ -218,6 +192,16 @@ def _category_filter(
         return log_filter(formatted, LogFilterOptions(
             head_lines=cfg.log_head, tail_lines=cfg.log_tail,
             max_consecutive_dupes=cfg.log_max_consecutive_dupes,
+        ))
+    if category == "read_file":
+        return read_file_filter(formatted, ReadFileFilterOptions(
+            import_collapse=cfg.read_import_collapse,
+            blank_line_max=cfg.read_blank_line_max,
+            comment_threshold=cfg.read_comment_threshold,
+            css_rule_collapse=cfg.read_css_rule_collapse,
+            generated_min_line_len=cfg.read_generated_min_line_len,
+            generated_min_run=cfg.read_generated_min_run,
+            literal_threshold=cfg.read_literal_threshold,
         ))
     # Default: generic
     return generic_filter(formatted, GenericFilterOptions(
@@ -360,9 +344,6 @@ def _classify_tool(tool_name: str, text: str) -> str:
 
     mapped = _TOOL_CATEGORY_MAP.get(tool_name)
     if mapped:
-        if mapped == "read_file":
-            # Use generic for now; compress_read_file is a future enhancement.
-            return "generic"
         return mapped
 
     # MCP tools: if output looks like JSON, use JSON filter.

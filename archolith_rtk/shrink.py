@@ -288,7 +288,9 @@ def shrink_oversized_tool_results(
     """Truncate tool-role messages exceeding max_chars.
 
     Only tool-role messages are truncated — user/assistant/system messages
-    would corrupt authored intent.
+    would corrupt authored intent. `read_file` output already gets
+    structure-aware Layer 1 compression; if it still breaches the Layer 2
+    budget, generic head/tail truncation here is intentional.
     """
     healed_count = 0
     healed_from = 0

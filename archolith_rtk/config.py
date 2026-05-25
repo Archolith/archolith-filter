@@ -74,6 +74,9 @@ class FilterConfig:
     read_blank_line_max: int = 1
     read_comment_threshold: int = 10
     read_css_rule_collapse: bool = True
+    read_generated_min_line_len: int = 500
+    read_generated_min_run: int = 5
+    read_literal_threshold: int = 8
 
 
 # Upper bounds to prevent env-var typos from disabling filtering or causing OOM.
@@ -234,6 +237,15 @@ def from_env() -> FilterConfig:
         read_css_rule_collapse=_env_int(
             "ARCHOLITH_RTK_FILTER_READ_CSS_RULE_COLLAPSE", 1 if base.read_css_rule_collapse else 0, 1
         ) == 1,
+        read_generated_min_line_len=_env_int(
+            "ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_LINE_LEN", base.read_generated_min_line_len, 5000
+        ),
+        read_generated_min_run=_env_int(
+            "ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_RUN", base.read_generated_min_run, 50
+        ),
+        read_literal_threshold=_env_int(
+            "ARCHOLITH_RTK_FILTER_READ_LITERAL_THRESHOLD", base.read_literal_threshold, 100
+        ),
     )
 
 
