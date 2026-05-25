@@ -107,8 +107,10 @@ def _compress_diff_body(diff_lines: list[str], opts: GitDiffFilterOptions) -> li
 def _select_preview_lines(section_body: list[str], file_head_lines: int) -> list[str]:
     """Select a compact representative preview from a file diff body.
 
-    Prefer changed lines over surrounding context and keep a small head/tail
-    sample so the preview shows both the start and end of the file's changes.
+    Prefer changed lines over surrounding context and keep head/tail samples
+    so the preview shows both the start and end of the file's changes.
+    Uses a proportional budget derived from file_head_lines to balance
+    compression and signal retention.
     """
     signal_positions = [
         index
@@ -117,7 +119,7 @@ def _select_preview_lines(section_body: list[str], file_head_lines: int) -> list
     ]
 
     if not signal_positions:
-        preview_budget = max(2, min(4, ceil(file_head_lines / 5)))
+        preview_budget = max(2, ceil(file_head_lines / 3))
         if len(section_body) <= preview_budget:
             return section_body
         head_keep = max(1, preview_budget - 1)
@@ -125,13 +127,16 @@ def _select_preview_lines(section_body: list[str], file_head_lines: int) -> list
         keep_positions.append(len(section_body) - 1)
         return [section_body[index] for index in sorted(set(keep_positions))]
 
-    preview_budget = max(2, min(5, ceil(file_head_lines / 5)))
-    head_keep = max(1, preview_budget - 1)
-    tail_keep = 1 if len(signal_positions) > head_keep else 0
+    preview_budget = max(2, ceil(file_head_lines / 3))
 
-    keep_positions = signal_positions[:head_keep]
-    if tail_keep:
-        keep_positions.extend(signal_positions[-tail_keep:])
+    if len(signal_positions) <= preview_budget:
+        keep_positions = signal_positions
+    else:
+        head_keep = max(1, preview_budget // 2)
+        tail_keep = max(1, preview_budget - head_keep)
+        head_slice = signal_positions[:head_keep]
+        tail_slice = signal_positions[-tail_keep:]
+        keep_positions = head_slice + tail_slice
 
     return [section_body[index] for index in sorted(set(keep_positions))]
 

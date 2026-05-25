@@ -49,8 +49,8 @@ class FilterConfig:
     lint_tail: int = 30
     typecheck_head: int = 15
     typecheck_tail: int = 30
-    git_diff_file_head: int = 15
-    git_diff_tail: int = 20
+    git_diff_file_head: int = 8
+    git_diff_tail: int = 10
     git_log_head: int = 25
     git_log_tail: int = 15
     git_status_head: int = 50
@@ -100,8 +100,8 @@ _LOW_RISK_OVERRIDES = {
     "lint_tail": 40,
     "typecheck_head": 20,
     "typecheck_tail": 40,
-    "git_diff_file_head": 15,
-    "git_diff_tail": 20,
+    "git_diff_file_head": 12,
+    "git_diff_tail": 14,
     "git_log_head": 35,
     "git_log_tail": 20,
     "git_status_head": 80,
@@ -133,8 +133,8 @@ _HIGH_RISK_OVERRIDES = {
     "lint_tail": 20,
     "typecheck_head": 10,
     "typecheck_tail": 20,
-    "git_diff_file_head": 8,
-    "git_diff_tail": 8,
+    "git_diff_file_head": 5,
+    "git_diff_tail": 5,
     "git_log_head": 15,
     "git_log_tail": 8,
     "git_status_head": 25,

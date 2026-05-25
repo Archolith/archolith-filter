@@ -276,7 +276,7 @@ def _build_shrink_scenarios() -> list[PracticalScenario]:
 
 _SCENARIO_ORDERING_EXCEPTIONS: dict[str, str] = {}
 _SCENARIO_MIN_SAVINGS: dict[str, dict[str, float]] = {
-    "filter_git_diff": {"low": 3.0, "balanced": 3.0, "high": 10.0},
+    "filter_git_diff": {"low": 15.0, "balanced": 20.0, "high": 30.0},
     "filter_search_heading": {"low": 10.0, "balanced": 10.0, "high": 30.0},
     "filter_bracketed_logs": {"low": 10.0, "balanced": 20.0, "high": 30.0},
     "filter_json": {"low": 50.0, "balanced": 80.0, "high": 90.0},
