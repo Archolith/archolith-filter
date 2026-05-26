@@ -11,6 +11,7 @@ char-based heuristics (~4 chars per token for English/code).
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 
 # ─── Token counting ───
@@ -279,6 +280,281 @@ class ShrinkTokensResult:
     chars_saved: int
 
 
+# ─── Read-file-aware truncation ───
+
+_READ_FILE_TOOL_NAME = "read_file"
+
+_DECLARATION_RE = re.compile(
+    r"^\s*"
+    r"(?:"
+    r"(?:class|def|async\s+def|function|const|let|var|type|interface|enum|namespace|module|export|pub|fn|struct|impl|trait)\s"
+    r"|(?:@\w+)"
+    r"|(?:(?:public|private|protected|static|final|abstract|override)\s+)+\w+\s*[\(<]"
+    r"|(?:\w[\w\-]*\s*\.[\w\-]+\s*\()"
+    r")"
+)
+
+_IMPORT_RE = re.compile(r"^\s*(?:from\s+\S+\s+)?import\s+")
+_FROM_IMPORT_RE = re.compile(r"^\s*from\s+\S+\s+import\s+")
+_COMMENT_LINE_RE = re.compile(r"^\s*(?:#\s|//\s?|/\*|\*\s|\*/)")
+_READ_FILE_DECL_PRESERVE_FRACTION = 0.6
+_READ_FILE_MIN_TAIL_CHARS = 256
+
+
+def _is_import_line(line: str) -> bool:
+    return bool(_IMPORT_RE.match(line) or _FROM_IMPORT_RE.match(line))
+
+
+def _is_comment_line(line: str) -> bool:
+    return bool(_COMMENT_LINE_RE.match(line))
+
+
+def truncate_read_file_for_chars(text: str, max_chars: int) -> str:
+    """Structure-aware truncation for read_file tool output."""
+    if len(text) <= max_chars:
+        return text
+
+    lines = text.split("\n")
+    result_lines: list[str] = []
+    idx = 0
+    import_count = 0
+    comment_count = 0
+    import_start = -1
+    comment_start = -1
+
+    while idx < len(lines):
+        line = lines[idx]
+        if _is_import_line(line):
+            if import_start == -1:
+                import_start = idx
+            import_count += 1
+            idx += 1
+            continue
+        if import_start != -1:
+            if import_count > 3:
+                result_lines.append(lines[import_start])
+                result_lines.append(f"  [... {import_count - 1} more import lines …]")
+            else:
+                result_lines.extend(lines[import_start:import_start + import_count])
+            import_start = -1
+            import_count = 0
+
+        if _is_comment_line(line):
+            if comment_start == -1:
+                comment_start = idx
+            comment_count += 1
+            idx += 1
+            continue
+        if comment_start != -1:
+            if comment_count > 5:
+                result_lines.append(lines[comment_start])
+                result_lines.append(f"  [... {comment_count - 1} more comment lines …]")
+            else:
+                result_lines.extend(lines[comment_start:comment_start + comment_count])
+            comment_start = -1
+            comment_count = 0
+
+        result_lines.append(line)
+        idx += 1
+
+    if import_start != -1:
+        if import_count > 3:
+            result_lines.append(lines[import_start])
+            result_lines.append(f"  [... {import_count - 1} more import lines …]")
+        else:
+            result_lines.extend(lines[import_start:import_start + import_count])
+
+    if comment_start != -1:
+        if comment_count > 5:
+            result_lines.append(lines[comment_start])
+            result_lines.append(f"  [... {comment_count - 1} more comment lines …]")
+        else:
+            result_lines.extend(lines[comment_start:comment_start + comment_count])
+
+    candidate = "\n".join(result_lines)
+    if len(candidate) <= max_chars:
+        return candidate
+
+    decl_budget = int(max_chars * _READ_FILE_DECL_PRESERVE_FRACTION)
+    tail_budget = min(_READ_FILE_MIN_TAIL_CHARS, max_chars - decl_budget)
+    head_budget = max(0, decl_budget - tail_budget)
+    decl_lines = [line for line in result_lines if _DECLARATION_RE.match(line)]
+    if not decl_lines:
+        return truncate_for_chars(text, max_chars)
+
+    head_decl: list[str] = []
+    tail_decl: list[str] = []
+    total_decl_chars = sum(len(line) + 1 for line in decl_lines)
+    if total_decl_chars <= decl_budget:
+        head_decl = decl_lines
+    else:
+        acc = 0
+        for dl in decl_lines:
+            if acc + len(dl) + 1 <= head_budget:
+                head_decl.append(dl)
+                acc += len(dl) + 1
+            else:
+                break
+        tail_acc = 0
+        for dl in reversed(decl_lines):
+            if tail_acc + len(dl) + 1 <= tail_budget:
+                tail_decl.insert(0, dl)
+                tail_acc += len(dl) + 1
+            else:
+                break
+
+    if not head_decl and not tail_decl:
+        return truncate_for_chars(text, max_chars)
+
+    dropped_decl = len(decl_lines) - len(head_decl) - len(tail_decl)
+    marker = f"\n[…{dropped_decl} declarations & body lines omitted — raise budget or narrow the read scope…]\n"
+    while head_decl and (
+        sum(len(line) + 1 for line in head_decl)
+        + sum(len(line) + 1 for line in tail_decl)
+        + len(marker) > max_chars
+    ):
+        if len(head_decl) > len(tail_decl):
+            head_decl.pop()
+        elif tail_decl:
+            tail_decl.pop(0)
+        else:
+            head_decl.pop()
+
+    if not head_decl and not tail_decl:
+        return truncate_for_chars(text, max_chars)
+
+    dropped_decl = len(decl_lines) - len(head_decl) - len(tail_decl)
+    marker = f"\n[…{dropped_decl} declarations & body lines omitted — raise budget or narrow the read scope…]\n"
+    return "\n".join(head_decl) + marker + "\n".join(tail_decl)
+
+
+def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
+    """Structure-aware token-budget truncation for read_file tool output."""
+    if max_tokens <= 0:
+        return ""
+    if len(text) <= max_tokens:
+        return text
+    if len(text) <= max_tokens * _CHARS_PER_TOKEN_ESTIMATE and count_tokens(text) <= max_tokens:
+        return text
+
+    lines = text.split("\n")
+    result_lines: list[str] = []
+    idx = 0
+    import_count = 0
+    comment_count = 0
+    import_start = -1
+    comment_start = -1
+
+    while idx < len(lines):
+        line = lines[idx]
+        if _is_import_line(line):
+            if import_start == -1:
+                import_start = idx
+            import_count += 1
+            idx += 1
+            continue
+        if import_start != -1:
+            if import_count > 3:
+                result_lines.append(lines[import_start])
+                result_lines.append(f"  [... {import_count - 1} more import lines …]")
+            else:
+                result_lines.extend(lines[import_start:import_start + import_count])
+            import_start = -1
+            import_count = 0
+
+        if _is_comment_line(line):
+            if comment_start == -1:
+                comment_start = idx
+            comment_count += 1
+            idx += 1
+            continue
+        if comment_start != -1:
+            if comment_count > 5:
+                result_lines.append(lines[comment_start])
+                result_lines.append(f"  [... {comment_count - 1} more comment lines …]")
+            else:
+                result_lines.extend(lines[comment_start:comment_start + comment_count])
+            comment_start = -1
+            comment_count = 0
+
+        result_lines.append(line)
+        idx += 1
+
+    if import_start != -1:
+        if import_count > 3:
+            result_lines.append(lines[import_start])
+            result_lines.append(f"  [... {import_count - 1} more import lines …]")
+        else:
+            result_lines.extend(lines[import_start:import_start + import_count])
+
+    if comment_start != -1:
+        if comment_count > 5:
+            result_lines.append(lines[comment_start])
+            result_lines.append(f"  [... {comment_count - 1} more comment lines …]")
+        else:
+            result_lines.extend(lines[comment_start:comment_start + comment_count])
+
+    candidate = "\n".join(result_lines)
+    if count_tokens(candidate) <= max_tokens:
+        return candidate
+
+    decl_lines = [line for line in result_lines if _DECLARATION_RE.match(line)]
+    if not decl_lines:
+        return truncate_for_tokens(text, max_tokens)
+
+    content_budget = max(0, max_tokens - _MARKER_TOKEN_OVERHEAD)
+    total_decl_tokens = sum(count_tokens(line) for line in decl_lines)
+    if total_decl_tokens <= content_budget:
+        marker = f"\n\n[…read_file compressed: {len(lines) - len(decl_lines)} non-declaration lines omitted…]\n\n"
+        return "\n".join(decl_lines) + marker
+
+    head_budget = int(content_budget * _READ_FILE_DECL_PRESERVE_FRACTION)
+    tail_budget = min(_TAIL_MAX_TOKENS, content_budget - head_budget)
+    head_decl: list[str] = []
+    tail_decl: list[str] = []
+    acc = 0
+    for dl in decl_lines:
+        tokens = count_tokens(dl)
+        if acc + tokens <= head_budget:
+            head_decl.append(dl)
+            acc += tokens
+        else:
+            break
+
+    tail_acc = 0
+    for dl in reversed(decl_lines):
+        if dl in head_decl:
+            break
+        tokens = count_tokens(dl)
+        if tail_acc + tokens <= tail_budget:
+            tail_decl.insert(0, dl)
+            tail_acc += tokens
+        else:
+            break
+
+    if not head_decl and not tail_decl:
+        return truncate_for_tokens(text, max_tokens)
+
+    dropped = len(decl_lines) - len(head_decl) - len(tail_decl)
+    marker = (
+        f"\n\n[…read_file compressed: ~{dropped} declarations & body lines omitted"
+        f" — raise budget or narrow the read scope…]\n\n"
+    )
+    result = "\n".join(head_decl) + marker + "\n".join(tail_decl)
+    while head_decl and count_tokens(result) > max_tokens:
+        head_decl.pop()
+        dropped = len(decl_lines) - len(head_decl) - len(tail_decl)
+        marker = (
+            f"\n\n[…read_file compressed: ~{dropped} declarations & body lines omitted"
+            f" — raise budget or narrow the read scope…]\n\n"
+        )
+        result = "\n".join(head_decl) + marker + "\n".join(tail_decl)
+
+    if not head_decl and not tail_decl:
+        return truncate_for_tokens(text, max_tokens)
+    return result
+
+
 # ─── Public API ───
 
 def shrink_oversized_tool_results(
@@ -288,9 +564,9 @@ def shrink_oversized_tool_results(
     """Truncate tool-role messages exceeding max_chars.
 
     Only tool-role messages are truncated — user/assistant/system messages
-    would corrupt authored intent. `read_file` output already gets
-    structure-aware Layer 1 compression; if it still breaches the Layer 2
-    budget, generic head/tail truncation here is intentional.
+    would corrupt authored intent. read_file tool output gets declaration-aware
+    truncation preserving signatures and class/function definitions; other tool
+    output uses generic head/tail truncation.
     """
     healed_count = 0
     healed_from = 0
@@ -305,7 +581,10 @@ def shrink_oversized_tool_results(
             continue
         healed_count += 1
         healed_from += len(msg.content)
-        truncated = truncate_for_chars(msg.content, max_chars)
+        if msg.name == _READ_FILE_TOOL_NAME:
+            truncated = truncate_read_file_for_chars(msg.content, max_chars)
+        else:
+            truncated = truncate_for_chars(msg.content, max_chars)
         out.append(ChatMessage(
             role=msg.role,
             content=truncated,
@@ -323,6 +602,8 @@ def shrink_oversized_tool_results_by_tokens(
     """Truncate tool-role messages exceeding max_tokens.
 
     Token-cap variant — char cap would let CJK slip past at 2× the intended token cost.
+    read_file tool output gets declaration-aware truncation; other tool output
+    uses generic head/tail truncation.
     """
     healed_count = 0
     tokens_saved = 0
@@ -334,7 +615,6 @@ def shrink_oversized_tool_results_by_tokens(
             out.append(msg)
             continue
         content = msg.content
-        # length ≤ max_tokens ⇒ tokens ≤ max_tokens — skip tokenize.
         if len(content) <= max_tokens:
             out.append(msg)
             continue
@@ -342,7 +622,10 @@ def shrink_oversized_tool_results_by_tokens(
         if before_tokens <= max_tokens:
             out.append(msg)
             continue
-        truncated = truncate_for_tokens(content, max_tokens)
+        if msg.name == _READ_FILE_TOOL_NAME:
+            truncated = truncate_read_file_for_tokens(content, max_tokens)
+        else:
+            truncated = truncate_for_tokens(content, max_tokens)
         after_tokens = count_tokens(truncated)
         healed_count += 1
         tokens_saved += max(0, before_tokens - after_tokens)

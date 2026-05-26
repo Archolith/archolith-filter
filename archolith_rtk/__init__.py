@@ -21,6 +21,7 @@ from .config import (
     is_verbose_command,
     normalize_risk_level,
 )
+from .dedupe import DedupeHit, DedupeTracker, get_dedupe_tracker, reset_dedupe_tracker
 from .filter_meta import FilterMeta, parse_result_meta
 from .filters import FilterResult
 from .filters.build_output import BuildFilterOptions, build_filter
@@ -67,6 +68,8 @@ __all__ = [
     "ChatMessage",
     "ClassifiedCommand",
     "CommandCategory",
+    "DedupeHit",
+    "DedupeTracker",
     "FilterConfig",
     "FilterRiskLevel",
     "FilterMeta",
@@ -101,6 +104,7 @@ __all__ = [
     "from_env",
     "fs_listing_filter",
     "generic_filter",
+    "get_dedupe_tracker",
     "get_filter_telemetry_store",
     "get_raw_output_store",
     "git_diff_filter",
@@ -116,6 +120,7 @@ __all__ = [
     "parse_result_meta",
     "read_file_filter",
     "record_filter_telemetry_with_tokens",
+    "reset_dedupe_tracker",
     "reset_filter_telemetry_store",
     "reset_raw_output_store",
     "search_filter",
@@ -239,6 +244,26 @@ def filter_output(
 
     # Strip ANSI escape codes — the model doesn't need color/styling.
     stripped = strip_ansi(text)
+
+    # Cross-turn dedupe: check if we've seen this exact content before.
+    dedupe = get_dedupe_tracker()
+    dedupe_hit = dedupe.check(stripped)
+    if dedupe_hit is not None:
+        occurrence = dedupe.record(stripped)
+        store = get_raw_output_store()
+        raw_id = store.store(text, command=command or tool, tool=tool, filtered_chars=0)
+        marker = f"[repeated output, occurrence {occurrence}, raw_output_id={raw_id}]"
+        record_filter_telemetry(
+            command=command or tool,
+            tool=tool or None,
+            filter_kind="dedupe",
+            raw_chars=len(text),
+            filtered_chars=len(marker),
+            raw_output_id=raw_id,
+            fallback_used=False,
+        )
+        return FilterResult(output=marker, raw_chars=len(text), filtered_chars=len(marker), truncated=True)
+    dedupe.record(stripped)
 
     # Error-aware: never filter failed commands.
     if timed_out or (exit_code is not None and exit_code != 0):

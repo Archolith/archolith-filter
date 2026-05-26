@@ -10,6 +10,7 @@ from archolith_rtk.config import (
     from_env,
     is_verbose_command,
 )
+from archolith_rtk.dedupe import reset_dedupe_tracker
 from archolith_rtk.filter_meta import parse_result_meta
 from archolith_rtk.filters.build_output import build_filter
 from archolith_rtk.filters.fs_listing import FsListingFilterOptions, fs_listing_filter
@@ -25,7 +26,7 @@ from archolith_rtk.filters.read_file import ReadFileFilterOptions, read_file_fil
 from archolith_rtk.filters.search import SearchFilterOptions, search_filter
 from archolith_rtk.filters.test_run_output import filter_test_output
 from archolith_rtk.filters.typecheck_output import typecheck_filter
-from archolith_rtk.raw_store import RawOutputStore, reset_raw_output_store
+from archolith_rtk.raw_store import RawOutputStore, get_raw_output_store, reset_raw_output_store
 from archolith_rtk.strip_ansi import strip_ansi
 from archolith_rtk.telemetry import get_filter_telemetry_store, reset_filter_telemetry_store
 
@@ -35,9 +36,11 @@ def _reset_stores():
     """Reset singleton stores between tests."""
     reset_raw_output_store()
     reset_filter_telemetry_store()
+    reset_dedupe_tracker()
     yield
     reset_raw_output_store()
     reset_filter_telemetry_store()
+    reset_dedupe_tracker()
 
 
 # ─── strip_ansi ───
@@ -810,3 +813,84 @@ class TestFilterMeta:
         code, timed = parse_result_meta("[job 1 · exited 1 · byteLength=500]", "job_output")
         assert code == 1
         assert not timed
+
+
+class TestCrossTurnDedupe:
+    def test_first_occurrence_normal(self):
+        text = "x" * 1000
+        r = filter_output(text, command="echo")
+        assert "repeated output" not in r.output
+
+    def test_second_occurrence_reduced(self):
+        text = "x" * 1000
+        first = filter_output(text, command="echo")
+        second = filter_output(text, command="echo")
+        assert "repeated output" in second.output
+        assert second.truncated
+        assert second.filtered_chars < first.raw_chars
+
+    def test_different_text_not_deduped(self):
+        filter_output("x" * 1000, command="echo")
+        r2 = filter_output("y" * 1000, command="echo")
+        assert "repeated output" not in r2.output
+
+    def test_occurrence_increments(self):
+        text = "x" * 1000
+        filter_output(text, command="echo")
+        r2 = filter_output(text, command="echo")
+        r3 = filter_output(text, command="echo")
+        assert "occurrence 2" in r2.output
+        assert "occurrence 3" in r3.output
+
+    def test_raw_output_recoverable_on_repeat(self):
+        import re
+
+        text = "unique payload " * 100
+        filter_output(text, command="echo")
+        r2 = filter_output(text, command="echo")
+        match = re.search(r"raw_output_id=(\d+)", r2.output)
+        assert match is not None
+        raw_id = int(match.group(1))
+        entry = get_raw_output_store().get(raw_id)
+        assert entry is not None
+        assert entry.raw == text
+
+    def test_telemetry_records_dedupe(self):
+        text = "x" * 1000
+        filter_output(text, command="echo")
+        filter_output(text, command="echo")
+        summary = get_filter_telemetry_store().get_summary()
+        assert summary.dedupe_calls == 1
+
+    def test_small_repeated_output_deduped(self):
+        text = "small but repeated"
+        filter_output(text, command="echo")
+        r2 = filter_output(text, command="echo")
+        assert "repeated output" in r2.output
+        assert r2.truncated
+
+    def test_filtering_disabled_no_dedupe(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_RTK_FILTERS", "off")
+        text = "x" * 1000
+        filter_output(text, command="echo")
+        r2 = filter_output(text, command="echo")
+        assert "repeated output" not in r2.output
+
+    def test_ansi_variant_deduped(self):
+        text_a = "\x1b[31m" + ("x" * 1000) + "\x1b[0m"
+        text_b = "\x1b[32m" + ("x" * 1000) + "\x1b[0m"
+        filter_output(text_a, command="echo")
+        r2 = filter_output(text_b, command="echo")
+        assert "repeated output" in r2.output
+
+    def test_dedupe_tracker_unit(self):
+        from archolith_rtk.dedupe import DedupeTracker
+
+        tracker = DedupeTracker()
+        assert tracker.check("hello") is None
+        assert tracker.record("hello") == 1
+        hit = tracker.check("hello")
+        assert hit is not None
+        assert hit.occurrence == 1
+        assert tracker.record("hello") == 2
+        assert tracker.check("world") is None

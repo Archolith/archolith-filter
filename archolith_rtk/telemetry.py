@@ -33,6 +33,7 @@ class FilterTelemetryEntry:
 class FilterTelemetrySummary:
     total_calls: int
     filtered_calls: int
+    dedupe_calls: int
     fallback_calls: int
     total_raw_chars: int
     total_filtered_chars: int
@@ -63,6 +64,7 @@ class FilterTelemetryStore:
         total_raw_chars = 0
         total_filtered_chars = 0
         filtered_calls = 0
+        dedupe_calls = 0
         fallback_calls = 0
         savings_sum = 0
         savings_count = 0
@@ -73,6 +75,8 @@ class FilterTelemetryStore:
             total_filtered_chars += entry.filtered_chars
             if entry.fallback_used:
                 fallback_calls += 1
+            elif entry.filter_kind == "dedupe":
+                dedupe_calls += 1
             else:
                 filtered_calls += 1
             if entry.raw_chars > 0:
@@ -87,6 +91,7 @@ class FilterTelemetryStore:
         return FilterTelemetrySummary(
             total_calls=len(self._entries),
             filtered_calls=filtered_calls,
+            dedupe_calls=dedupe_calls,
             fallback_calls=fallback_calls,
             total_raw_chars=total_raw_chars,
             total_filtered_chars=total_filtered_chars,
@@ -115,6 +120,7 @@ class FilterTelemetryStore:
             f"tool output filtered: {fmt(s.total_filtered_chars)} chars",
             f"{est_tag}saved: {fmt(s.estimated_saved_tokens)} tokens",
             f"average savings: {s.average_savings_pct}%",
+            f"dedupes: {s.dedupe_calls}",
             f"fallbacks: {s.fallback_calls}",
         ])
 

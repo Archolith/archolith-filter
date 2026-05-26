@@ -1,5 +1,11 @@
 # Changelog — archolith-rtk
 
+## 2026-05-25 — added dedupe and read_file-aware Layer 2 shrink
+
+- Added exact-match cross-turn output deduplication with `DedupeTracker`, public reset/get helpers, raw-output recovery markers, and telemetry accounting for dedupe hits.
+- Added declaration-aware `read_file` truncation in Layer 2 for both char and token budgets so oversized file reads preserve imports/comments/declarations more intelligently than generic head-tail truncation.
+- Extended filter/shrink test coverage and updated the practical benchmark harness to reset dedupe state between timed filter scenarios.
+
 ## 2026-05-25 — deepened read_file compression
 
 - Replaced the lightweight `read_file` filter with a more aggressive structure-aware pass that collapses generated/minified blobs, large literal fixtures, embedded JSON, multiline strings, and SVG-heavy blocks while preserving declarations and nearby anchors.

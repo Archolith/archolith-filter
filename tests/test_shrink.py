@@ -18,6 +18,8 @@ from archolith_rtk.shrink import (
     shrink_oversized_tool_results_by_tokens,
     truncate_for_chars,
     truncate_for_tokens,
+    truncate_read_file_for_chars,
+    truncate_read_file_for_tokens,
 )
 
 # ─── count_tokens ───
@@ -81,6 +83,96 @@ class TestTruncateForTokens:
         assert len(result) < len(text)
 
 
+# ─── truncate_read_file_for_chars ───
+
+
+class TestTruncateReadFileForChars:
+    def test_short_text_unchanged(self):
+        assert truncate_read_file_for_chars("def hello():\n    pass", 1000) == "def hello():\n    pass"
+
+    def test_import_collapse(self):
+        lines = ["import os"] + [f"import module_{i}_with_long_name" for i in range(20)]
+        text = "\n".join(lines)
+        result = truncate_read_file_for_chars(text, 200)
+        assert "import os" in result
+        assert "import lines" in result
+
+    def test_comment_collapse(self):
+        lines = ["# header"] + [f"# comment line number {i} here" for i in range(10)]
+        text = "\n".join(lines)
+        result = truncate_read_file_for_chars(text, 200)
+        assert "# header" in result
+        assert "comment lines" in result
+
+    def test_declarations_preserved(self):
+        lines = [f"import mod{i}" for i in range(100)]
+        lines.extend([
+            "",
+            "class Service:",
+            "    def run(self):",
+            "        pass",
+            "",
+            "class Client:",
+            "    def connect(self):",
+            "        pass",
+        ])
+        text = "\n".join(lines)
+        result = truncate_read_file_for_chars(text, 500)
+        assert "class Service:" in result
+        assert "class Client:" in result
+
+    def test_no_declarations_falls_back_to_generic(self):
+        text = "x" * 5000
+        result = truncate_read_file_for_chars(text, 500)
+        assert "truncated" in result
+
+    def test_small_imports_not_collapsed(self):
+        lines = ["import os", "import sys", "def hello():", "    pass"]
+        text = "\n".join(lines)
+        result = truncate_read_file_for_chars(text, 1000)
+        assert "import os" in result
+        assert "import sys" in result
+
+
+# ─── truncate_read_file_for_tokens ───
+
+
+class TestTruncateReadFileForTokens:
+    def test_short_text_unchanged(self):
+        assert truncate_read_file_for_tokens("def hello():\n    pass", 1000) == "def hello():\n    pass"
+
+    def test_zero_budget(self):
+        assert truncate_read_file_for_tokens("hello", 0) == ""
+
+    def test_import_collapse(self):
+        lines = ["import os"] + [f"import module_{i}_with_long_name" for i in range(20)]
+        text = "\n".join(lines)
+        result = truncate_read_file_for_tokens(text, 50)
+        assert "import os" in result
+        assert "import lines" in result
+
+    def test_declarations_preserved(self):
+        lines = [f"import mod{i}" for i in range(50)]
+        lines.extend([
+            "",
+            "class Service:",
+            "    def run(self):",
+            "        pass",
+            "",
+            "class Client:",
+            "    def connect(self):",
+            "        pass",
+        ])
+        text = "\n".join(lines)
+        result = truncate_read_file_for_tokens(text, 100)
+        assert "class Service:" in result or "class Client:" in result
+
+    def test_no_declarations_falls_back_to_generic(self):
+        text = "word " * 5000
+        result = truncate_read_file_for_tokens(text, 100)
+        assert "truncated" in result
+
+
 # ─── shrink_oversized_tool_results (char-based) ───
 
 
@@ -126,14 +218,59 @@ class TestShrinkToolResultsChars:
         result = shrink_oversized_tool_results(msgs, 1000)
         assert result.healed_count == 2
 
-    def test_read_file_tool_message_uses_generic_truncation(self):
+    def test_read_file_tool_message_uses_declaration_aware_truncation(self):
         code_lines = ["import os"] + [f"import mod{i}" for i in range(200)]
         code_lines.extend(["", "def main():", "    pass"])
         large_content = "\n".join(code_lines)
         msgs = [ChatMessage(role="tool", content=large_content, tool_call_id="1", name="read_file")]
         result = shrink_oversized_tool_results(msgs, 500)
         assert result.healed_count == 1
+        assert "read_file" in result.messages[0].name
+        assert "def main():" in result.messages[0].content
+        assert "import lines" in result.messages[0].content
+
+    def test_read_file_preserves_declarations_over_body(self):
+        lines = [f"import mod{i}" for i in range(100)]
+        lines.extend([
+            "",
+            "class Service:",
+            "    def run(self):",
+            "        pass",
+            "",
+            "class Client:",
+            "    def connect(self):",
+            "        pass",
+        ])
+        large_content = "\n".join(lines)
+        msgs = [ChatMessage(role="tool", content=large_content, tool_call_id="1", name="read_file")]
+        result = shrink_oversized_tool_results(msgs, 500)
+        content = result.messages[0].content
+        assert "class Service:" in content
+        assert "class Client:" in content
+        assert "def run(self):" in content
+
+    def test_read_file_non_read_file_still_uses_generic(self):
+        long_content = "x" * 5000
+        msgs = [ChatMessage(role="tool", content=long_content, tool_call_id="1", name="search")]
+        result = shrink_oversized_tool_results(msgs, 500)
+        assert result.healed_count == 1
         assert "truncated" in result.messages[0].content
+        assert "declarations" not in result.messages[0].content
+
+    def test_read_file_small_content_unchanged(self):
+        small = "def hello():\n    pass\n"
+        msgs = [ChatMessage(role="tool", content=small, tool_call_id="1", name="read_file")]
+        result = shrink_oversized_tool_results(msgs, 1000)
+        assert result.healed_count == 0
+        assert result.messages[0].content == small
+
+    def test_read_file_no_name_field_uses_generic(self):
+        long_content = "x" * 5000
+        msgs = [ChatMessage(role="tool", content=long_content, tool_call_id="1")]
+        result = shrink_oversized_tool_results(msgs, 500)
+        assert result.healed_count == 1
+        assert "truncated" in result.messages[0].content
+        assert "declarations" not in result.messages[0].content
 
 
 # ─── shrink_oversized_tool_results_by_tokens ───
@@ -157,6 +294,32 @@ class TestShrinkToolResultsTokens:
         result = shrink_oversized_tool_results_by_tokens(msgs, 100)
         assert result.healed_count == 1
         assert result.tokens_saved > 0
+
+    def test_read_file_uses_declaration_aware_token_truncation(self):
+        lines = [f"import mod{i}" for i in range(100)]
+        lines.extend([
+            "",
+            "class Service:",
+            "    def run(self):",
+            "        pass",
+            "",
+            "class Client:",
+            "    def connect(self):",
+            "        pass",
+        ])
+        content = "\n".join(lines)
+        msgs = [ChatMessage(role="tool", content=content, tool_call_id="1", name="read_file")]
+        result = shrink_oversized_tool_results_by_tokens(msgs, 100)
+        assert result.healed_count == 1
+        assert "class Service:" in result.messages[0].content or "class Client:" in result.messages[0].content
+
+    def test_non_read_file_uses_generic_token_truncation(self):
+        content = "word " * 5000
+        msgs = [ChatMessage(role="tool", content=content, tool_call_id="1", name="search")]
+        result = shrink_oversized_tool_results_by_tokens(msgs, 100)
+        assert result.healed_count == 1
+        assert "truncated" in result.messages[0].content
+        assert "declarations" not in result.messages[0].content
 
 
 class TestShrinkMessagesCompatibility:

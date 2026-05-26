@@ -12,6 +12,7 @@ from archolith_rtk import (
     count_tokens,
     estimate_conversation_tokens,
     filter_output,
+    reset_dedupe_tracker,
     shrink_oversized_tool_call_args_by_tokens,
     shrink_oversized_tool_results_by_tokens,
 )
@@ -74,10 +75,12 @@ class _AcceptanceCheck:
     detail: str = ""
 
 
-def _measure_call(func, iterations: int = 15) -> tuple[object, float, float]:
+def _measure_call(func, iterations: int = 15, before_each=None) -> tuple[object, float, float]:
     samples: list[float] = []
     result = None
     for _ in range(iterations):
+        if before_each is not None:
+            before_each()
         start = time.perf_counter()
         result = func()
         elapsed_ms = (time.perf_counter() - start) * 1000
@@ -185,7 +188,10 @@ def _build_filter_scenarios() -> list[PracticalScenario]:
     for name, runner, before_tokens, required, forbidden in base_scenarios:
         for level in ALL_RISK_LEVELS:
             cfg = base_config_for_risk_level(level)
-            result, median_ms, p95_ms = _measure_call(lambda c=cfg, r=runner: r(c))
+            result, median_ms, p95_ms = _measure_call(
+                lambda c=cfg, r=runner: r(c),
+                before_each=reset_dedupe_tracker,
+            )
             output = result.output
             after_tokens = count_tokens(output)
             checks: list[str] = []
