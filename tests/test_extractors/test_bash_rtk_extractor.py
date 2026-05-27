@@ -76,6 +76,21 @@ diff --git a/src/main.py b/src/main.py
 
 
 @pytest.mark.asyncio
+async def test_classify_routes_git_log(extractor, http_client):
+    """git log output routes to git-log category with commit hashes."""
+    output = """
+abc1234 Fix the widget parser
+def5678 Add tests for parser
+9ab0123 Bump version
+"""
+    record = _record("git log --oneline -3", output)
+    result = await extractor.extract(record, http_client, turn_number=2, session_goal=None)
+    assert any("git log" in f["content"] for f in result.facts)
+    assert any("abc1234" in f["content"] for f in result.facts)
+    assert result.used_llm is False
+
+
+@pytest.mark.asyncio
 async def test_builtin_produces_generic_fact(extractor, http_client):
     """Shell builtins produce a single generic fact, no crash."""
     record = _record("cd src && ls", "file1.py\nfile2.py\n")

@@ -29,6 +29,7 @@ _FAILED_TEST_RE = re.compile(r"FAILED\s+([\w/.:]+)")
 
 _GIT_STATUS_MODIFIED_RE = re.compile(r"^\s+(?:modified|new file|deleted):\s+(.+)", re.MULTILINE)
 _GIT_DIFF_FILE_RE = re.compile(r"^(?:\+\+\+|---)\s+(?:a/|b/)(.+)", re.MULTILINE)
+_GIT_LOG_RE = re.compile(r"^([0-9a-f]{7,}) (.+)", re.MULTILINE)
 
 _ERROR_RE = re.compile(r"(?:error|Error|ERROR):?\s+(.{0,120})")
 
@@ -66,6 +67,8 @@ class BashRtkExtractor(RtkExtractorBase):
             facts, files_touched = self._extract_git_status(command, output)
         elif category == "git-diff":
             facts, files_touched = self._extract_git_diff(command, output)
+        elif category == "git-log":
+            facts = self._extract_git_log(command, output)
         elif category in ("build", "lint", "typecheck"):
             facts = self._extract_errors(command, output, category)
         elif category in ("passthrough", "shell"):
@@ -148,6 +151,22 @@ class BashRtkExtractor(RtkExtractorBase):
             facts = self._generic_fact(command, output, 0)
 
         return facts, [p.strip() for p in paths]
+
+    def _extract_git_log(self, command: str, output: str) -> list[dict]:
+        """Extract commit hashes and messages from git log."""
+        facts: list[dict] = []
+
+        for commit_hash, msg in _GIT_LOG_RE.findall(output):
+            facts.append({
+                "content": f"[Bash] git log: {commit_hash} {msg.strip()}",
+                "fact_type": "tool_result",
+                "confidence": 1.0,
+            })
+
+        if not facts:
+            facts = self._generic_fact(command, output, 0)
+
+        return facts
 
     def _extract_errors(self, command: str, output: str, category: str) -> list[dict]:
         """Extract error/warning counts from build/lint/typecheck output."""

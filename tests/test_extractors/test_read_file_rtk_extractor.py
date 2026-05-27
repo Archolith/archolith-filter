@@ -89,3 +89,23 @@ async def test_files_touched_populated(extractor, http_client):
     record = _record("src/main.py", _NORMAL_FILE)
     result = await extractor.extract(record, http_client, turn_number=1, session_goal=None)
     assert "src/main.py" in result.files_touched
+
+
+@pytest.mark.asyncio
+async def test_empty_result_no_crash(extractor, http_client):
+    """Empty result string produces a fact without line count."""
+    record = _record("src/empty.py", "")
+    result = await extractor.extract(record, http_client, turn_number=1, session_goal=None)
+    assert len(result.facts) == 1
+    assert "[Read] src/empty.py read at turn 1" in result.facts[0]["content"]
+    assert result.used_llm is False
+
+
+@pytest.mark.asyncio
+async def test_small_file_no_annotation(extractor, http_client):
+    """Small files under RTK filter threshold get plain fact with no annotation."""
+    record = _record("src/tiny.py", "x = 1\n")
+    result = await extractor.extract(record, http_client, turn_number=1, session_goal=None)
+    assert len(result.facts) == 1
+    assert "import-heavy" not in result.facts[0]["content"]
+    assert "generated" not in result.facts[0]["content"]

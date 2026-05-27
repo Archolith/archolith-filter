@@ -94,5 +94,7 @@ class ReadFileRtkExtractor(RtkExtractorBase):
             annotations.append("generated file, collapsed")
         if "CSS body lines omitted" in filtered:
             annotations.append("stylesheet")
+        if "comment lines omitted" in filtered:
+            annotations.append("comment-heavy")
 
         return annotations
