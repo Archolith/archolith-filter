@@ -7,7 +7,7 @@ A clean-room Python reimplementation of the RTK output filtering system from
 context reduction that operate on tool output and oversized conversation
 messages.
 
-Part of the Archolith suite.
+Part of the [archolith&trade;](https://archolith.dev) stack.
 
 ## Install
 
@@ -289,4 +289,7 @@ making it suitable for CI gating.
 
 ## License
 
-MIT
+Source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+Free for non-commercial use; commercial use requires permission from the licensor.
+
+archolith&trade; is a trademark of Charles Harvey.
