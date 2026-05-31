@@ -24,6 +24,7 @@ from .config import (
     is_verbose_command,
     normalize_risk_level,
 )
+from .agent_solo import AgentSoloResult, AgentSoloStats, compress_agent_solo_turn
 from .dedupe import DedupeHit, DedupeTracker, get_dedupe_tracker, reset_dedupe_tracker
 from .filter_meta import FilterMeta, parse_result_meta
 from .filters import FilterResult
@@ -78,6 +79,10 @@ __all__ = [
 # ─── Core API ───
 "filter_output",
 "shrink_messages",
+# ─── Agent-solo compression ───
+"AgentSoloResult",
+"AgentSoloStats",
+"compress_agent_solo_turn",
 # ─── Shrink ───
 "ChatMessage",
 "ShrinkCharsResult",
