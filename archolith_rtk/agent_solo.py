@@ -1,6 +1,6 @@
 """Agent-solo turn compression — mechanical token savings without an LLM call.
 
-Three independent, composable strategies that reduce the token footprint of
+Four independent, composable strategies that reduce the token footprint of
 tool-call continuation turns (where the last message role is "tool"):
 
 A. **Shrink** — cap every tool-role message to an approximate token
@@ -15,7 +15,12 @@ C. **Filter middle** — apply ``filter_output()`` to compressible tool
    results in the historical (middle) section while shrinking the
    coherence tail.
 
-All three are fail-open: if anything raises, the original messages are
+D. **Compact tool args** — replace large arguments in completed tool_use
+   calls (Write, Edit, create_file) with compact summaries.  The file
+   content is already cached by the proxy's file cache — the model can
+   use Read to retrieve it if needed.
+
+All four are fail-open: if anything raises, the original messages are
 returned unchanged.
 
 Usage::
@@ -50,6 +55,7 @@ class AgentSoloStats:
     chars_saved_shrink: int = 0
     chars_saved_dedup: int = 0
     chars_saved_filter: int = 0
+    chars_saved_compact: int = 0
     total_chars_saved: int = 0
     skipped_reason: str | None = None
 
@@ -59,6 +65,7 @@ class AgentSoloStats:
             "chars_saved_shrink": self.chars_saved_shrink,
             "chars_saved_dedup": self.chars_saved_dedup,
             "chars_saved_filter": self.chars_saved_filter,
+            "chars_saved_compact": self.chars_saved_compact,
             "total_chars_saved": self.total_chars_saved,
             "skipped_reason": self.skipped_reason,
         }
@@ -337,6 +344,129 @@ def _apply_filter_middle(
     return system + filtered_middle + shrunk_tail, middle_saved + tail_saved
 
 
+# ─── Strategy D: Compact completed tool_use arguments ──────────────────
+
+# Tool names whose arguments contain file content worth compacting.
+_WRITE_TOOLS = frozenset({
+    "write", "write_file", "create_file", "create",
+    "str_replace_editor",  # Cursor/Aider style
+})
+_EDIT_TOOLS = frozenset({
+    "edit", "edit_file", "patch", "str_replace",
+})
+
+# Minimum argument length to bother compacting.
+_COMPACT_MIN_CHARS = 500
+
+
+def _apply_compact_tool_args(
+    messages: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    """Compact large arguments in completed tool_use calls.
+
+    For Write/Edit tool calls that have a matching tool result (i.e., the
+    call has been executed), replace the file content in the arguments
+    with a compact summary.  The model can use Read to retrieve the
+    original content from the proxy's file cache if needed.
+
+    Only processes assistant messages in the middle of the conversation
+    (not the last assistant message, which may be an in-progress call).
+
+    Returns (processed_messages, chars_saved).
+    """
+    import json as _json
+
+    # Build set of tool_call_ids that have matching tool results
+    completed_ids: set[str] = set()
+    for msg in messages:
+        if msg.get("role") == "tool" and msg.get("tool_call_id"):
+            completed_ids.add(msg["tool_call_id"])
+
+    if not completed_ids:
+        return messages, 0
+
+    result: list[dict[str, Any]] = []
+    chars_saved = 0
+
+    for msg in messages:
+        if msg.get("role") != "assistant" or not msg.get("tool_calls"):
+            result.append(msg)
+            continue
+
+        new_tool_calls = []
+        msg_changed = False
+
+        for tc in msg["tool_calls"]:
+            fn = tc.get("function", {})
+            tc_id = tc.get("id", "")
+            name = (fn.get("name") or "").lower()
+            args_str = fn.get("arguments", "")
+
+            # Only compact completed calls with large arguments
+            if (
+                tc_id not in completed_ids
+                or len(args_str) < _COMPACT_MIN_CHARS
+            ):
+                new_tool_calls.append(tc)
+                continue
+
+            # Parse arguments to find file content
+            try:
+                args = _json.loads(args_str)
+            except (ValueError, TypeError):
+                new_tool_calls.append(tc)
+                continue
+
+            compacted = False
+            original_len = len(args_str)
+
+            if name in _WRITE_TOOLS and "content" in args:
+                content = args["content"]
+                if isinstance(content, str) and len(content) > _COMPACT_MIN_CHARS:
+                    path = args.get("file_path") or args.get("path") or "file"
+                    lines = content.count("\n") + 1
+                    args["content"] = (
+                        f"[written, {lines} lines, {len(content):,} chars"
+                        f" -- use Read on {path} to review]"
+                    )
+                    compacted = True
+
+            elif name in _EDIT_TOOLS:
+                for key in ("old_string", "old_str", "old"):
+                    if key in args and isinstance(args[key], str) and len(args[key]) > _COMPACT_MIN_CHARS:
+                        lines = args[key].count("\n") + 1
+                        args[key] = f"[{lines} lines replaced]"
+                        compacted = True
+                for key in ("new_string", "new_str", "new"):
+                    if key in args and isinstance(args[key], str) and len(args[key]) > _COMPACT_MIN_CHARS:
+                        lines = args[key].count("\n") + 1
+                        path = args.get("file_path") or args.get("path") or "file"
+                        args[key] = (
+                            f"[{lines} lines -- use Read on {path} to review]"
+                        )
+                        compacted = True
+
+            if compacted:
+                new_args_str = _json.dumps(args, ensure_ascii=False)
+                saved = original_len - len(new_args_str)
+                if saved > 0:
+                    new_fn = {**fn, "arguments": new_args_str}
+                    new_tool_calls.append({**tc, "function": new_fn})
+                    chars_saved += saved
+                    msg_changed = True
+                else:
+                    new_tool_calls.append(tc)
+            else:
+                new_tool_calls.append(tc)
+
+        if msg_changed:
+            result.append({**msg, "tool_calls": new_tool_calls})
+        else:
+            result.append(msg)
+
+    return result, chars_saved
+
+
 # ─── Orchestrator ────────────────────────────────────────────────────────
 
 
@@ -347,14 +477,16 @@ def compress_agent_solo_turn(
     shrink_enabled: bool = False,
     dedup_enabled: bool = False,
     filter_middle_enabled: bool = False,
+    compact_tool_args_enabled: bool = True,
     shrink_max_tokens: int = 2000,
     coherence_tail_size: int = 10,
     tail_shrink_tokens: int = 2000,
 ) -> AgentSoloResult:
     """Apply enabled agent-solo compression strategies.
 
-    Strategies are applied in order C -> B -> A so that:
-    - Middle compression runs first (structural reduction)
+    Strategies are applied in order D -> C -> B -> A so that:
+    - Tool arg compaction runs first (removes dead-weight file content)
+    - Middle compression runs next (structural reduction)
     - Dedup runs on the structurally compressed output
     - Shrink runs last as a catch-all cap
 
@@ -365,6 +497,9 @@ def compress_agent_solo_turn(
         shrink_enabled: Enable Strategy A (token-budget all tool results).
         dedup_enabled: Enable Strategy B (cross-turn content dedup).
         filter_middle_enabled: Enable Strategy C (filter middle, shrink tail).
+        compact_tool_args_enabled: Enable Strategy D (compact completed
+            Write/Edit tool_use arguments).  Default True — essentially
+            free and always beneficial.
         shrink_max_tokens: Approximate per-result token cap for Strategy A
             (converted to chars via ~4 chars/token — fuzzy, not exact).
         coherence_tail_size: Number of trailing messages for the tail
@@ -377,12 +512,22 @@ def compress_agent_solo_turn(
     """
     stats = AgentSoloStats()
 
-    any_enabled = shrink_enabled or dedup_enabled or filter_middle_enabled
+    any_enabled = shrink_enabled or dedup_enabled or filter_middle_enabled or compact_tool_args_enabled
     if not any_enabled:
         stats.skipped_reason = "no_strategies_enabled"
         return AgentSoloResult(messages=messages, stats=stats)
 
     result = messages
+
+    # Strategy D — compact completed tool_use arguments (Write/Edit content)
+    if compact_tool_args_enabled:
+        try:
+            result, saved = _apply_compact_tool_args(result)
+            stats.chars_saved_compact = saved
+            if saved > 0:
+                stats.strategies_applied.append("compact")
+        except Exception:
+            pass  # fail-open
 
     # Strategy C — filter middle section + shrink tail
     if filter_middle_enabled:
@@ -422,6 +567,7 @@ def compress_agent_solo_turn(
         stats.chars_saved_shrink
         + stats.chars_saved_dedup
         + stats.chars_saved_filter
+        + stats.chars_saved_compact
     )
 
     return AgentSoloResult(messages=result, stats=stats)
