@@ -1,5 +1,11 @@
 # Changelog — archolith-rtk
 
+## 2026-05-31 — completed quality remediation closeout
+
+- Committed the missing `normalize.py`, `paths.py`, `redact.py`, and `strip_thinking.py` modules that the trimmed public API already referenced, eliminating the detached-review import failure in `archolith_rtk.__init__`.
+- Committed focused regression coverage for runtime-noise normalization, path normalization, secret redaction, and thinking-block stripping so the new public helpers are exercised directly.
+- Re-ran the full pytest suite (`293 passed, 1 skipped`) plus the targeted compound-literal regression subset (`13 passed`) to confirm the remediation plan now lands as a runnable work product rather than untracked drift.
+
 ## 2026-05-25 — added dedupe and read_file-aware Layer 2 shrink
 
 - Added exact-match cross-turn output deduplication with `DedupeTracker`, public reset/get helpers, raw-output recovery markers, and telemetry accounting for dedupe hits.
