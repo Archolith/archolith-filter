@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
+from ._patterns import is_verbose_command  # noqa: F401 — re-exported for backward compat
+
 
 def _env_int(name: str, fallback: int, max_val: int | None = None) -> int:
     """Read a numeric env var, returning the default if missing or invalid.
@@ -290,14 +292,3 @@ def is_filter_enabled() -> bool:
     if env.lower() in ("off", "false", "0"):
         return False
     return True
-
-
-def is_verbose_command(command: str) -> bool:
-    """Detect verbose/debug flags in a command string.
-
-    Delegates to the shared implementation in ``_patterns`` to avoid
-    recompiling regex on every call.
-    """
-    from ._patterns import is_verbose_command as _impl
-
-    return _impl(command)

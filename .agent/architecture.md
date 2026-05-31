@@ -78,21 +78,32 @@ preset selector. Loaded from `ARCHOLITH_RTK_FILTER_*` env vars via
 top of the selected preset. `boost_for_verbose()` doubles head/tail limits for
 verbose commands. Upper bounds prevent typos from disabling filtering.
 
-### Layer 2 — shrink.py
+### Layer 2 — shrink/ package
 
 `shrink_messages()` is the main entry point (compatibility wrapper for dict or ChatMessage lists). Internally routes to `shrink_oversized_tool_results()` (char-based) or `shrink_oversized_tool_results_by_tokens()` (token-based). Also exposes `shrink_oversized_tool_call_args_by_tokens()` for long JSON strings in tool_call arguments.
 
-Truncation primitives:
-- `truncate_for_chars()` — head + 10% tail windowing
-- `truncate_for_tokens()` — iterative convergence via `_size_prefix_to_tokens()` / `_size_suffix_to_tokens()` (never tokenizes full input)
+The shrink subsystem is organized into focused submodules with a strict import DAG:
 
-Token counting: `count_tokens()` uses tiktoken `cl100k_base` if available, else divides by 4.
+| Module | Responsibility |
+|--------|---------------|
+| `models.py` | Frozen dataclasses: ChatMessage, ToolCall, ToolCallFunction, ShrinkCharsResult, ShrinkTokensResult |
+| `token_counter.py` | `count_tokens()` — tiktoken `cl100k_base` if available, else ÷4 heuristic |
+| `truncate.py` | `truncate_for_chars()` (head + 10% tail), `truncate_for_tokens()` (iterative convergence) |
+| `read_file_truncate.py` | Declaration-preserving char and token truncation for `read_file` tool output |
+| `json_shrink.py` | `shrink_json_long_strings()` — collapse long string values in tool_call arguments |
+| `orchestrator.py` | Public API: `shrink_oversized_tool_results*`, `shrink_messages`, `estimate_*` |
+| `__init__.py` | Re-exports all public symbols from submodules |
 
 ### Supporting modules
 
+- **_patterns.py**: Single source of truth for shared regex patterns (import/comment/declaration detection, verbose flag patterns) used by `filters/read_file.py`, `shrink/read_file_truncate.py`, `config.py`, and `filter_meta.py`.
 - **raw_store.py**: LRU store (200 entries, 256K chars cap) for recovering original pre-filter text by ID. Module-level singleton.
 - **telemetry.py**: Session-scoped `FilterTelemetryStore` tracking per-call and aggregate token savings. `format_summary()` for human-readable output.
 - **strip_ansi.py**: Regex-based ANSI escape stripping (CSI, OSC, 8-bit CSI, misc ESC).
+- **strip_thinking.py**: Strips model-internal reasoning tags (`<thinking>`, `<antThinking>`, etc.) from tool output.
+- **redact.py**: Secret redaction — strips API keys, tokens, credentials, and connection strings using compiled alternation regex.
+- **normalize.py**: Runtime noise normalization — replaces timestamps, PIDs, elapsed times, memory sizes with stable placeholders for prompt caching.
+- **paths.py**: Workspace path normalization — replaces absolute paths with project-relative equivalents, normalizes separators.
 - **filter_meta.py**: `FilterMeta` dataclass and `parse_result_meta()` for extracting exit codes from formatted output headers.
 
 ## Configuration / Environment Variables
