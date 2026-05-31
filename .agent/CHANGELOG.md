@@ -1,5 +1,16 @@
 # Changelog — archolith-rtk
 
+## 2026-05-31 — agent-solo turn compression (Layer 3)
+
+- Added `agent_solo.py` with four composable compression strategies (A-D) for tool-call continuation turns.
+- **Strategy A (Shrink)**: Char-budget every tool result to `max_tokens * 4` chars. Replaced tiktoken with char-based math for 636x speedup on large sessions.
+- **Strategy B (Dedup)**: Cross-turn content hash tracking via `DedupeTracker`. Replaces byte-identical results with compact markers.
+- **Strategy C (Filter middle)**: Splits messages into system/middle/tail. Applies `filter_output()` to compressible tools in the middle, shrinks tail results.
+- **Strategy D (Compact tool args)**: Replaces large Write/Edit/create_file content in completed tool_use calls with compact summaries. Model can Read to recover. Default on.
+- Added `AgentSoloStats`, `AgentSoloResult` dataclasses and exported from `__init__.py`.
+- Added `tests/test_agent_solo.py` with 21 tests covering all strategies.
+- Updated architecture docs to document Layer 3 and dedupe module.
+
 ## 2026-05-31 — completed quality remediation closeout
 
 - Committed the missing `normalize.py`, `paths.py`, `redact.py`, and `strip_thinking.py` modules that the trimmed public API already referenced, eliminating the detached-review import failure in `archolith_rtk.__init__`.

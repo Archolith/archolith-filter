@@ -2,14 +2,15 @@
 
 ## Overview
 
-archolith-rtk is a deterministic Token Reduction Toolkit for LLM agent contexts. It compresses tool output and truncates oversized conversation messages without requiring LLM calls.
+archolith-rtk is a deterministic Token Reduction Toolkit for LLM agent contexts. It compresses tool output, truncates oversized conversation messages, and applies mechanical turn-level compression — all without requiring LLM calls.
 
-The library is organized as two sequential layers:
+The library is organized into three layers:
 
 1. **Layer 1 — Output Filters**: Compress tool results before they enter the model context. 13 shell-command categories plus tool-routed `read_file` compression decide which filter strategy to apply.
 2. **Layer 2 — Shrink**: Truncate oversized tool-role messages in conversation history. Supports both char-based and token-based budgets.
+3. **Layer 3 — Agent-Solo Turn Compression**: Four composable strategies (A-D) that reduce token footprint of tool-call continuation turns. These run on agent-solo turns (where the last message is a tool result, not a user message) and apply mechanical savings without an LLM call.
 
-Both layers are deterministic by default.
+All layers are deterministic by default.
 
 ## Tech Stack
 
@@ -28,18 +29,25 @@ Both layers are deterministic by default.
 Tool output text
        │
        ▼
-  filter_output()          ← Layer 1
+  filter_output()                    ← Layer 1
   ├── strip_ansi()
-  ├── classify_command()   →  CommandCategory
-  ├── _category_filter()   →  category-specific FilterResult
-  ├── raw_store.store()    →  recovery ID appended to output
+  ├── classify_command()             → CommandCategory
+  ├── _category_filter()             → category-specific FilterResult
+  ├── raw_store.store()              → recovery ID appended to output
   └── record_filter_telemetry()
        │
        ▼
-  shrink_messages()        ← Layer 2
-  ├── count_tokens()       →  tiktoken or heuristic
+  shrink_messages()                  ← Layer 2
+  ├── count_tokens()                 → tiktoken or heuristic
   ├── truncate_for_chars() / truncate_for_tokens()
   └── ShrinkCharsResult / ShrinkTokensResult
+       │
+       ▼
+  compress_agent_solo_turn()         ← Layer 3
+  ├── _apply_compact_tool_args()     → D: compact Write/Edit arguments
+  ├── _apply_filter_middle()         → C: filter_output() on middle section
+  ├── _apply_dedup()                 → B: cross-turn content hash dedup
+  └── _apply_shrink()                → A: char-budget all tool results
 ```
 
 ## Key Components
@@ -93,6 +101,41 @@ The shrink subsystem is organized into focused submodules with a strict import D
 | `json_shrink.py` | `shrink_json_long_strings()` — collapse long string values in tool_call arguments |
 | `orchestrator.py` | Public API: `shrink_oversized_tool_results*`, `shrink_messages`, `estimate_*` |
 | `__init__.py` | Re-exports all public symbols from submodules |
+
+### Layer 3 — agent_solo.py
+
+`compress_agent_solo_turn()` applies four composable, fail-open strategies to
+tool-call continuation turns (agent-solo turns where the last message is "tool").
+Strategies run in order D→C→B→A so each layer operates on already-compressed output.
+
+| Strategy | Function | What it does |
+|----------|----------|-------------|
+| **D — Compact** | `_apply_compact_tool_args()` | Replace large Write/Edit/create_file arguments in completed tool_use calls with compact summaries. The model can Read the file to recover content. Default **on**. |
+| **C — Filter middle** | `_apply_filter_middle()` | Split messages into system/middle/tail. Apply `filter_output()` to compressible tools (bash, grep, glob, search) in the middle. Shrink tool results in the tail. |
+| **B — Dedup** | `_apply_dedup()` | Replace byte-identical tool results with compact markers using a caller-provided `DedupeTracker`. Cross-turn state scoped per session. |
+| **A — Shrink** | `_apply_shrink()` | Cap every tool-role message to `shrink_max_tokens * 4` chars (~4 chars/token, fuzzy). No tiktoken overhead. |
+
+Key types:
+- `AgentSoloStats` — per-strategy char savings (`chars_saved_shrink`, `_dedup`, `_filter`, `_compact`)
+- `AgentSoloResult` — `messages` + `stats`
+
+Helper functions:
+- `_is_compressible_tool(name)` — classifies tools safe to filter in the middle (bash, grep, glob, search, web_fetch, etc.)
+- `_split_sections(messages, tail_size)` — separates system prefix, middle, coherence tail
+- `_shrink_tail_messages(tail, max_tokens)` — char-based tail shrinking
+- `_filter_middle_messages(middle)` — applies `filter_output()` to compressible tools
+
+### dedupe.py
+
+`DedupeTracker` provides exact-match cross-turn output deduplication.
+
+- `check(content) -> int | None` — returns occurrence count if content was seen before
+- `record(content) -> int` — records content hash, returns occurrence number
+- `clear()` — reset all state
+- `get_hashes() -> set[str]` — return current hash set
+
+The caller creates one tracker per session and passes it to `compress_agent_solo_turn()`.
+Minimum content length for hashing: 200 chars (`_DEDUP_MIN_CHARS`).
 
 ### Supporting modules
 
