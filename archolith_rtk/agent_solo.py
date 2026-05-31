@@ -3,8 +3,10 @@
 Three independent, composable strategies that reduce the token footprint of
 tool-call continuation turns (where the last message role is "tool"):
 
-A. **Shrink** — token-budget every tool-role message via
-   ``shrink_oversized_tool_results_by_tokens``.
+A. **Shrink** — cap every tool-role message to an approximate token
+   budget using char-length heuristics (~4 chars/token).  The cap is
+   fuzzy — actual token count may be 10-20% above or below the nominal
+   ``shrink_max_tokens`` value.  No tiktoken overhead.
 
 B. **Dedup** — replace byte-identical tool results with compact markers
    using a caller-provided ``DedupeTracker``.
@@ -38,7 +40,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .dedupe import DedupeTracker
-from .shrink.models import ChatMessage
 
 
 @dataclass
@@ -85,16 +86,6 @@ def _tool_content_chars(messages: list[dict[str, Any]]) -> int:
     return total
 
 
-def _to_chat_messages(messages: list[dict[str, Any]]) -> list[ChatMessage]:
-    """Convert raw dicts to ChatMessage for shrink functions."""
-    return [ChatMessage.from_dict(m) for m in messages]
-
-
-def _from_chat_messages(cms: list[ChatMessage]) -> list[dict[str, Any]]:
-    """Convert ChatMessage list back to raw dicts."""
-    return [cm.to_dict() for cm in cms]
-
-
 # ─── Compressible tool classification ───────────────────────────────────
 
 # Tools whose output is informational/search and safe to filter in the
@@ -130,23 +121,43 @@ def _is_compressible_tool(tool_name: str) -> bool:
 
 # ─── Strategy A: Shrink ─────────────────────────────────────────────────
 
+# Approximate chars-per-token for code/English — same constant used by
+# the shrink subsystem.  Avoids tiktoken overhead entirely.
+_CHARS_PER_TOKEN = 4
+
 
 def _apply_shrink(
     messages: list[dict[str, Any]],
     max_tokens: int,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Token-budget every tool-role message.
+    """Char-budget every tool-role message (~4 chars/token).
+
+    Uses ``truncate_for_chars`` instead of tiktoken-based shrinking so
+    the cost is O(n) string slicing, not O(n) tokenization.
 
     Returns (processed_messages, chars_saved).
     """
-    from .shrink.orchestrator import shrink_oversized_tool_results_by_tokens
+    from .shrink.truncate import truncate_for_chars
 
-    before = _tool_content_chars(messages)
-    cms = _to_chat_messages(messages)
-    result = shrink_oversized_tool_results_by_tokens(cms, max_tokens=max_tokens)
-    out = _from_chat_messages(result.messages)
-    after = _tool_content_chars(out)
-    return out, max(0, before - after)
+    max_chars = max_tokens * _CHARS_PER_TOKEN
+    result: list[dict[str, Any]] = []
+    chars_saved = 0
+
+    for msg in messages:
+        if msg.get("role") != "tool":
+            result.append(msg)
+            continue
+
+        content = msg.get("content")
+        if not isinstance(content, str) or len(content) <= max_chars:
+            result.append(msg)
+            continue
+
+        truncated = truncate_for_chars(content, max_chars)
+        chars_saved += len(content) - len(truncated)
+        result.append({**msg, "content": truncated})
+
+    return result, chars_saved
 
 
 # ─── Strategy B: Dedup ──────────────────────────────────────────────────
@@ -275,18 +286,31 @@ def _shrink_tail_messages(
     tail: list[dict[str, Any]],
     max_tokens: int,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Shrink tool results in the coherence tail.
+    """Shrink tool results in the coherence tail (char-based).
 
     Returns (processed_tail, chars_saved).
     """
-    from .shrink.orchestrator import shrink_oversized_tool_results_by_tokens
+    from .shrink.truncate import truncate_for_chars
 
-    before = _tool_content_chars(tail)
-    cms = _to_chat_messages(tail)
-    result = shrink_oversized_tool_results_by_tokens(cms, max_tokens=max_tokens)
-    out = _from_chat_messages(result.messages)
-    after = _tool_content_chars(out)
-    return out, max(0, before - after)
+    max_chars = max_tokens * _CHARS_PER_TOKEN
+    result: list[dict[str, Any]] = []
+    chars_saved = 0
+
+    for msg in tail:
+        if msg.get("role") != "tool":
+            result.append(msg)
+            continue
+
+        content = msg.get("content")
+        if not isinstance(content, str) or len(content) <= max_chars:
+            result.append(msg)
+            continue
+
+        truncated = truncate_for_chars(content, max_chars)
+        chars_saved += len(content) - len(truncated)
+        result.append({**msg, "content": truncated})
+
+    return result, chars_saved
 
 
 def _apply_filter_middle(
@@ -341,7 +365,8 @@ def compress_agent_solo_turn(
         shrink_enabled: Enable Strategy A (token-budget all tool results).
         dedup_enabled: Enable Strategy B (cross-turn content dedup).
         filter_middle_enabled: Enable Strategy C (filter middle, shrink tail).
-        shrink_max_tokens: Per-result token cap for Strategy A.
+        shrink_max_tokens: Approximate per-result token cap for Strategy A
+            (converted to chars via ~4 chars/token — fuzzy, not exact).
         coherence_tail_size: Number of trailing messages for the tail
             (Strategy C).
         tail_shrink_tokens: Per-result token cap for tail shrinking
