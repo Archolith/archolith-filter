@@ -14,6 +14,14 @@ import re
 from dataclasses import dataclass
 
 from . import FilterResult
+from .._patterns import (
+    DECLARATION_RE,
+    IMPORT_RE,
+    FROM_IMPORT_RE,
+    COMMENT_LINE_RE,
+    is_import_line,
+    is_comment_line,
+)
 
 
 @dataclass(frozen=True)
@@ -29,40 +37,27 @@ class ReadFileFilterOptions:
 
 DEFAULT_OPTS = ReadFileFilterOptions()
 
-_IMPORT_RE = re.compile(r"^\s*(?:from\s+\S+\s+)?import\s+")
-_FROM_IMPORT_RE = re.compile(r"^\s*from\s+\S+\s+import\s+")
 _CSS_RULE_RE = re.compile(r"^\s*[\w\-\.\#\[\]:,>+~*][\s\w\-\.\#\[\]:,>+~*]*\{")
 _CSS_CLOSE_RE = re.compile(r"\}\s*$")
-_COMMENT_BLOCK_RE = re.compile(r"^\s*(?:#\s|//\s?|/\*|\*\s|\*/)")
 _LINE_COMMENT_RE = re.compile(r"^\s*(?://|#)\s")
 _BLOCK_COMMENT_START = re.compile(r"^\s*/\*")
 _BLOCK_COMMENT_END = re.compile(r"\*/\s*$")
-_DECLARATION_RE = re.compile(
-    r"^\s*"
-    r"(?:"
-    r"(?:class|def|async\s+def|function|const|let|var|type|interface|enum|namespace|module|export|pub|fn|struct|impl|trait)\s"
-    r"|(?:@\w+)"
-    r"|(?:(?:public|private|protected|static|final|abstract|override)\s+)+\w+\s*[\(<]"
-    r"|(?:\w[\w\-]*\s*\.[\w\-]+\s*\()"
-    r")"
-)
-_ARRAY_LITERAL_START_RE = re.compile(
-    r"^\s*(?:const|let|var|)\s*\w+\s*[:=].*=\s*\[|^\s*(?:const|let|var|)\s*\w+\s*[:=]\s*\["
-)
-_OBJECT_LITERAL_START_RE = re.compile(
-    r"^\s*(?:const|let|var|)\s*\w+\s*[:=].*=\s*\{|^\s*(?:const|let|var|)\s*\w+\s*[:=]\s*\{"
+# Unified pattern for compound literal starts (arrays, objects, dicts).
+# Matches: [keyword] identifier [:=]... [{[] — two alternatives per bracket type
+# to handle both inline-assignment and direct-initializer styles.
+_COMPOUND_LITERAL_RE = re.compile(
+    r"^\s*(?:const|let|var|)?\s*\w+\s*[:=].*=\s*[\[{]"
+    r"|^\s*(?:const|let|var|)?\s*\w+\s*[:=]\s*[\[{]"
 )
 _MULTILINE_STRING_START_RE = re.compile(r'(?:"""|\'\'\'|`)')
 _SVG_PATH_D_RE = re.compile(r"[dD]\s*=\s*\"[Mm][^\"]*")
 _SVG_TAG_RE = re.compile(r"<svg[\s>]")
 _EMBEDDED_JSON_RE = re.compile(r"^\s*(?:const|let|var|)\s*\w+\s*[:=]\s*JSON\.parse\(")
-_DICT_LITERAL_START_RE = re.compile(
-    r"^\s*\w+\s*[:=].*=\s*\{|^\s*\w+\s*[:=]\s*\{"
-)
 
 
 def _is_import_line(line: str) -> bool:
-    return bool(_IMPORT_RE.match(line) or _FROM_IMPORT_RE.match(line))
+    """Check for import statements."""
+    return is_import_line(line)
 
 
 def _is_css_rule_start(line: str) -> bool:
@@ -74,7 +69,8 @@ def _is_css_rule_end(line: str) -> bool:
 
 
 def _is_comment_line(line: str) -> bool:
-    return bool(_COMMENT_BLOCK_RE.match(line))
+    """Check for comment-like lines (block or line comments)."""
+    return is_comment_line(line)
 
 
 def _is_line_comment(line: str) -> bool:
@@ -124,18 +120,45 @@ def _is_multiline_string_start(line: str) -> bool:
     return False
 
 
+def _compound_literal_type(line: str) -> str | None:
+    """Classify a line as starting an array/object/dict literal, or None.
+
+    Returns "array", "object", "dict", or None. Object and dict both use
+    ``{`` but are distinguished by the presence of a (const|let|var) keyword
+    prefix — keyword-present is "object" (JS-style), absent is "dict" (Python-style).
+    CSS rule starts are excluded for ``{`` variants.
+    """
+    m = _COMPOUND_LITERAL_RE.match(line if line == line.strip() else line.strip())
+    if not m:
+        return None
+    # Determine bracket from the match — find last [{ or [] in the line.
+    stripped = line.strip()
+    # Find which bracket opens the literal by scanning from the match position.
+    # The regex guarantees one of [{ or [] is at the end of the match.
+    bracket = stripped[m.end() - 1] if m.end() > 0 else None
+    if bracket == "[":
+        return "array"
+    if bracket == "{":
+        # Exclude CSS rules (e.g. ".foo {").
+        if _is_css_rule_start(stripped):
+            return None
+        # Distinguish JS object literal (has keyword) from Python dict literal.
+        if re.match(r"^\s*(?:const|let|var)\b", stripped):
+            return "object"
+        return "dict"
+    return None
+
+
 def _is_array_literal_start(line: str) -> bool:
-    return bool(_ARRAY_LITERAL_START_RE.match(line))
+    return _compound_literal_type(line) == "array"
 
 
 def _is_object_literal_start(line: str) -> bool:
-    stripped = line.strip()
-    return bool(_OBJECT_LITERAL_START_RE.match(stripped)) and not _is_css_rule_start(stripped)
+    return _compound_literal_type(line) == "object"
 
 
 def _is_dict_literal_start(line: str) -> bool:
-    stripped = line.strip()
-    return bool(_DICT_LITERAL_START_RE.match(stripped)) and not _is_css_rule_start(stripped)
+    return _compound_literal_type(line) == "dict"
 
 
 def _is_embedded_json_start(line: str) -> bool:

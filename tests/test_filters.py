@@ -628,6 +628,59 @@ class TestReadFileFilter:
         assert "import lines omitted" in r.output or not r.truncated
 
 
+class TestCompoundLiteralType:
+    """Regression tests for _compound_literal_type consolidation.
+
+    Verifies that the unified pattern correctly classifies array, object,
+    and dict literal starts while excluding CSS rules.
+    """
+
+    @pytest.fixture
+    def _clf(self):
+        from archolith_rtk.filters.read_file import _compound_literal_type
+
+        return _compound_literal_type
+
+    def test_js_array(self, _clf):
+        assert _clf("const items = [") == "array"
+
+    def test_js_let_array(self, _clf):
+        assert _clf("let data = [") == "array"
+
+    def test_js_var_array(self, _clf):
+        assert _clf("var buffer = [") == "array"
+
+    def test_bare_array(self, _clf):
+        assert _clf("items = [") == "array"
+
+    def test_js_object_with_keyword(self, _clf):
+        assert _clf("const config = {") == "object"
+
+    def test_js_let_object(self, _clf):
+        assert _clf("let opts = {") == "object"
+
+    def test_dict_literal_no_keyword(self, _clf):
+        assert _clf("ICONS: dict[str, str] = {") == "dict"
+
+    def test_bare_dict(self, _clf):
+        assert _clf("data = {") == "dict"
+
+    def test_css_rule_excluded(self, _clf):
+        assert _clf(".big-class {") is None
+
+    def test_css_id_excluded(self, _clf):
+        assert _clf("#my-id {") is None
+
+    def test_plain_line_not_matched(self, _clf):
+        assert _clf("def hello():") is None
+
+    def test_inline_assignment_array(self, _clf):
+        assert _clf("const items: string[] = [") == "array"
+
+    def test_inline_assignment_object(self, _clf):
+        assert _clf("const opts: Config = {") == "object"
+
+
 # ─── filter_output (top-level API) ───
 
 

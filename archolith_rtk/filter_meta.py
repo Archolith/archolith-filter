@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from ._patterns import is_verbose_command  # noqa: F401 — re-exported from __init__
+
 
 @dataclass(frozen=True)
 class FilterMeta:
@@ -12,23 +14,6 @@ class FilterMeta:
     command: str
     exit_code: int | None = None
     timed_out: bool = False
-
-
-_VERBOSE_FLAGS: list[re.Pattern[str]] = [
-    re.compile(r"(?:^|\s)--verbose\b"),
-    re.compile(r"(?:^|\s)-verbose\b"),
-    re.compile(r"(?:^|\s)-v{2,}\b"),  # -vv, -vvv
-    re.compile(r"(?:^|\s)--debug\b"),
-    re.compile(r"(?:^|\s)--full\b"),
-    re.compile(r"(?:^|\s)--detailed\b"),
-    re.compile(r"(?:^|\s)--show-all\b"),
-    re.compile(r"(?:^|\s)--no-summary\b"),
-]
-
-
-def is_verbose_command(command: str) -> bool:
-    """Detect verbose/debug flags in a command string."""
-    return any(p.search(command) for p in _VERBOSE_FLAGS)
 
 
 def parse_result_meta(formatted: str, tool: str) -> tuple[int | None, bool]:

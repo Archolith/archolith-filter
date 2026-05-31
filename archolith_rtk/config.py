@@ -293,17 +293,11 @@ def is_filter_enabled() -> bool:
 
 
 def is_verbose_command(command: str) -> bool:
-    """Detect verbose/debug flags in a command string."""
-    import re
+    """Detect verbose/debug flags in a command string.
 
-    verbose_flags = [
-        r"(?:^|\s)--verbose\b",
-        r"(?:^|\s)-verbose\b",
-        r"(?:^|\s)-v{2,}\b",  # -vv, -vvv
-        r"(?:^|\s)--debug\b",
-        r"(?:^|\s)--full\b",
-        r"(?:^|\s)--detailed\b",
-        r"(?:^|\s)--show-all\b",
-        r"(?:^|\s)--no-summary\b",
-    ]
-    return any(re.search(p, command) for p in verbose_flags)
+    Delegates to the shared implementation in ``_patterns`` to avoid
+    recompiling regex on every call.
+    """
+    from ._patterns import is_verbose_command as _impl
+
+    return _impl(command)

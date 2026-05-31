@@ -9,7 +9,7 @@ from archolith_rtk.shrink import (
     ChatMessage,
     ToolCall,
     ToolCallFunction,
-    _shrink_json_long_strings,
+    shrink_json_long_strings,
     count_tokens,
     estimate_conversation_tokens,
     estimate_request_tokens,
@@ -375,30 +375,30 @@ class TestShrinkToolCallArgs:
         assert isinstance(result.messages[0].tool_calls[0].function.arguments, str)
 
 
-# ─── _shrink_json_long_strings ───
+# ─── shrink_json_long_strings ───
 
 
 class TestShrinkJsonLongStrings:
     def test_short_values_unchanged(self):
-        result = _shrink_json_long_strings('{"path": "/foo", "line": 42}')
+        result = shrink_json_long_strings('{"path": "/foo", "line": 42}')
         parsed = json.loads(result)
         assert parsed["path"] == "/foo"
         assert parsed["line"] == 42
 
     def test_long_value_shrunk(self):
         long_val = "x" * 1000
-        result = _shrink_json_long_strings(f'{{"content": "{long_val}"}}')
+        result = shrink_json_long_strings(f'{{"content": "{long_val}"}}')
         parsed = json.loads(result)
         assert "shrunk" in parsed["content"]
 
     def test_invalid_json_returns_head(self):
         bad = "{" + "x" * 500
-        result = _shrink_json_long_strings(bad)
+        result = shrink_json_long_strings(bad)
         assert "unparsed" in result
 
     def test_non_object_returns_unchanged(self):
         arr = "[1, 2, 3]"
-        result = _shrink_json_long_strings(arr)
+        result = shrink_json_long_strings(arr)
         assert result == arr
 
 
