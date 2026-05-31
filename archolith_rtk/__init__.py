@@ -4,8 +4,11 @@ Deterministic output filtering for LLM agent contexts.
 Two layers: output filters and shrink.
 
 Public API:
-    filter_output()  — Layer 1: compress tool results before model context
+    filter_output() — Layer 1: compress tool results before model context
     shrink_messages() — Layer 2: truncate oversized messages in conversation history
+
+Stable public API is documented in ``__all__``.  Everything else is internal
+and may change without notice.
 """
 
 from __future__ import annotations
@@ -58,7 +61,11 @@ from .shrink import (
     truncate_read_file_for_chars,
     truncate_read_file_for_tokens,
 )
+from .normalize import normalize_runtime_noise
+from .paths import normalize_paths
+from .redact import redact_secrets
 from .strip_ansi import strip_ansi
+from .strip_thinking import strip_thinking_blocks
 from .telemetry import (
     FilterTelemetrySummary,
     get_filter_telemetry_store,
@@ -68,40 +75,45 @@ from .telemetry import (
 )
 
 __all__ = [
-    # ─── Core API ───
-    "filter_output",
-    "shrink_messages",
-    # ─── Shrink ───
-    "ChatMessage",
-    "ShrinkCharsResult",
-    "ShrinkTokensResult",
-    "ToolCall",
-    "ToolCallFunction",
-    "count_tokens",
-    "estimate_conversation_tokens",
-    "estimate_request_tokens",
-    "shrink_json_long_strings",
-    "shrink_oversized_tool_call_args_by_tokens",
-    "shrink_oversized_tool_results",
-    "shrink_oversized_tool_results_by_tokens",
-    "truncate_for_chars",
-    "truncate_for_tokens",
-    "truncate_read_file_for_chars",
-    "truncate_read_file_for_tokens",
-    # ─── Config ───
-    "FilterConfig",
-    "FilterRiskLevel",
-    "base_config_for_risk_level",
-    "from_env",
-    "is_filter_enabled",
-    "is_verbose_command",
-    # ─── Filter ───
-    "FilterMeta",
-    "FilterResult",
-    # ─── Classifier ───
-    "ClassifiedCommand",
-    "CommandCategory",
-    "classify_command",
+# ─── Core API ───
+"filter_output",
+"shrink_messages",
+# ─── Shrink ───
+"ChatMessage",
+"ShrinkCharsResult",
+"ShrinkTokensResult",
+"ToolCall",
+"ToolCallFunction",
+"count_tokens",
+"estimate_conversation_tokens",
+"estimate_request_tokens",
+"shrink_json_long_strings",
+"shrink_oversized_tool_call_args_by_tokens",
+"shrink_oversized_tool_results",
+"shrink_oversized_tool_results_by_tokens",
+"truncate_for_chars",
+"truncate_for_tokens",
+"truncate_read_file_for_chars",
+"truncate_read_file_for_tokens",
+# ─── Config ───
+"FilterConfig",
+"FilterRiskLevel",
+"base_config_for_risk_level",
+"from_env",
+# ─── Filter ───
+"FilterMeta",
+"FilterResult",
+"parse_result_meta",
+# ─── Classifier ───
+"ClassifiedCommand",
+"CommandCategory",
+"classify_command",
+# ─── Normalization & Stripping ───
+"normalize_paths",
+"normalize_runtime_noise",
+"redact_secrets",
+"strip_ansi",
+"strip_thinking_blocks",
 ]
 
 # Minimum result length (chars) to justify filtering overhead.

@@ -128,11 +128,11 @@ def _compound_literal_type(line: str) -> str | None:
     prefix — keyword-present is "object" (JS-style), absent is "dict" (Python-style).
     CSS rule starts are excluded for ``{`` variants.
     """
-    m = _COMPOUND_LITERAL_RE.match(line if line == line.strip() else line.strip())
+    stripped = line.strip()
+    m = _COMPOUND_LITERAL_RE.match(stripped)
     if not m:
         return None
     # Determine bracket from the match — find last [{ or [] in the line.
-    stripped = line.strip()
     # Find which bracket opens the literal by scanning from the match position.
     # The regex guarantees one of [{ or [] is at the end of the match.
     bracket = stripped[m.end() - 1] if m.end() > 0 else None
