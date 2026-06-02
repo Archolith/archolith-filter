@@ -69,7 +69,7 @@ class ReadFileRtkExtractor(RtkExtractorBase):
 
     def _detect_annotations(self, content: str) -> list[str]:
         """Run RTK's read_file_filter to detect structural characteristics."""
-        from archolith_rtk.filters.read_file import read_file_filter, ReadFileFilterOptions
+        from archolith_rtk.filters.read_file import ReadFileFilterOptions, read_file_filter
 
         if not content.strip():
             return []

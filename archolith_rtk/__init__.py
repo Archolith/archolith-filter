@@ -13,6 +13,7 @@ and may change without notice.
 
 from __future__ import annotations
 
+from .agent_solo import AgentSoloResult, AgentSoloStats, compress_agent_solo_turn
 from .classifier import ClassifiedCommand, CommandCategory, classify_command
 from .config import (
     FilterConfig,
@@ -22,10 +23,9 @@ from .config import (
     from_env,
     is_filter_enabled,
     is_verbose_command,
-    normalize_risk_level,
+    normalize_risk_level,  # noqa: F401 — re-exported in __all__
 )
-from .agent_solo import AgentSoloResult, AgentSoloStats, compress_agent_solo_turn
-from .dedupe import DedupeHit, DedupeTracker, get_dedupe_tracker, reset_dedupe_tracker
+from .dedupe import DedupeHit, DedupeTracker, get_dedupe_tracker, reset_dedupe_tracker  # noqa: F401
 from .filter_meta import FilterMeta, parse_result_meta
 from .filters import FilterResult
 from .filters.build_output import BuildFilterOptions, build_filter
@@ -42,7 +42,10 @@ from .filters.read_file import ReadFileFilterOptions, read_file_filter
 from .filters.search import SearchFilterOptions, search_filter
 from .filters.test_run_output import TestFilterOptions, filter_test_output
 from .filters.typecheck_output import TypecheckFilterOptions, typecheck_filter
-from .raw_store import RawOutputStore, get_raw_output_store, reset_raw_output_store
+from .normalize import normalize_runtime_noise
+from .paths import normalize_paths
+from .raw_store import RawOutputStore, get_raw_output_store, reset_raw_output_store  # noqa: F401
+from .redact import redact_secrets
 from .shrink import (
     ChatMessage,
     ShrinkCharsResult,
@@ -62,12 +65,9 @@ from .shrink import (
     truncate_read_file_for_chars,
     truncate_read_file_for_tokens,
 )
-from .normalize import normalize_runtime_noise
-from .paths import normalize_paths
-from .redact import redact_secrets
 from .strip_ansi import strip_ansi
 from .strip_thinking import strip_thinking_blocks
-from .telemetry import (
+from .telemetry import (  # noqa: F401 — re-exported in __all__
     FilterTelemetrySummary,
     get_filter_telemetry_store,
     record_filter_telemetry,

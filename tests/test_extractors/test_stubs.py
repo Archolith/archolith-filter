@@ -10,7 +10,11 @@ import pytest
 
 from archolith_rtk.extractors._stubs import (
     PartialExtractionResult as StubPartialExtractionResult,
+)
+from archolith_rtk.extractors._stubs import (
     ToolCallRecord as StubToolCallRecord,
+)
+from archolith_rtk.extractors._stubs import (
     ToolExtractor as StubToolExtractor,
 )
 

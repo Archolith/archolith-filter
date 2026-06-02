@@ -13,12 +13,12 @@ import re
 import httpx
 
 from archolith_rtk.classifier import classify_command
-from archolith_rtk.strip_ansi import strip_ansi
 from archolith_rtk.extractors.base import (
     PartialExtractionResult,
     RtkExtractorBase,
     ToolCallRecord,
 )
+from archolith_rtk.strip_ansi import strip_ansi
 
 # --- Regex patterns for category-specific extraction ---
 

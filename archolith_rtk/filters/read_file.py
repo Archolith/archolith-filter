@@ -13,15 +13,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from . import FilterResult
 from .._patterns import (
-    DECLARATION_RE,
-    IMPORT_RE,
-    FROM_IMPORT_RE,
-    COMMENT_LINE_RE,
-    is_import_line,
     is_comment_line,
+    is_import_line,
 )
+from . import FilterResult
 
 
 @dataclass(frozen=True)
