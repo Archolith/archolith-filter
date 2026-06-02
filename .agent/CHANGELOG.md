@@ -1,5 +1,21 @@
 # Changelog — archolith-rtk
 
+## 2026-06-02 — format-switch compression (Strategies 1-9)
+
+- **Strategy 1 (CSV)**: JSON arrays of uniform objects are serialized as CSV with header rows, showing significantly more data in fewer tokens than truncated JSON.
+- **Strategy 2 (KV)**: Flat JSON objects (≥3 keys, no nesting) are rendered as `key: value` lines, removing JSON syntax overhead.
+- **Strategy 3 (Dotted-key)**: Nested JSON objects with flat leaf values are flattened to `a.b.c: value` dotted-key lines.
+- **Strategy 4 (Column factoring)**: Extends CSV by extracting columns where one dominant value appears in ≥80% of rows as `key=value` lines above the header.
+- **Strategy 5 (Stack trace collapsing)**: Detects Java, Python, Node, and Go stack traces in generic output; collapses framework frames into a summary line while preserving application frames.
+- **Strategy 6 (Git status grouping)**: Groups short-format `git status -s` lines by directory prefix and status code, reducing repeated path prefixes.
+- **Strategy 7 (Search heading reformat)**: Reformats inline-style grep matches (`path:line:content`) to heading style with the file path stated once and matches indented below.
+- **Strategy 8 (Build task summary)**: For successful Gradle/Maven builds, detects task lines and emits a compact summary (`BUILD SUCCESSFUL in Xs / Tasks: ...`) instead of the full task list.
+- **Strategy 9 (ls -la abbreviation)**: Parses `ls -la/l` column format and emits abbreviated output with just name, type hint, and human-readable size.
+- All 9 strategies include safety checks and fall back to existing behavior when format-switch output isn't shorter.
+- Added 17 new config knobs with env-var overrides and risk-level presets for all strategies.
+- Added 29 new tests covering strategy detection, serialization, edge cases, and knob controls.
+- Updated `architecture.md`, `README.md`, and both changelogs.
+
 ## 2026-05-31 — agent-solo turn compression (Layer 3)
 
 - Added `agent_solo.py` with four composable compression strategies (A-D) for tool-call continuation turns.

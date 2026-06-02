@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added format-switch compression for JSON output: CSV for tabular arrays (Strategy 1), column factoring for dominant values (Strategy 4), key-value lines for flat objects (Strategy 2), and dotted-key lines for nested objects (Strategy 3). Each strategy has safety checks that fall back to truncation when the format-switch output isn't shorter.
+- Added stack trace frame collapsing (Strategy 5): detects Java, Python, Node, and Go stack traces in generic output, classifies framework vs application frames, and collapses framework frames into a summary line.
+- Added git status prefix grouping (Strategy 6): groups short-format git status lines by directory and status code, producing more compact output when many files share the same directory.
+- Added search heading reformat (Strategy 7): reformats inline-style grep matches (`path:line:content`) to heading style, stating the file path once with indented match lines below.
+- Added build task summary (Strategy 8): for successful Gradle/Maven builds, detects task lines and emits a compact summary instead of the full task list, preserving warning lines.
+- Added ls -la abbreviation (Strategy 9): parses `ls -la/l` column format and emits abbreviated output with just name, type hint, and human-readable size, stripping permissions/owner/group/timestamp.
+- Added 17 new config knobs with env-var overrides and risk-level presets for all format-switch strategies.
+- Added 29 new tests covering all 9 format-switch strategies plus edge cases.
+
 - Added exact-match cross-turn output deduplication so repeated identical tool results collapse to a short recovery marker with a `raw_output_id`.
 - Added declaration-aware Layer 2 `read_file` shrinking for char and token budgets, preserving signatures and structure when oversized file reads survive Layer 1.
 - Hardened the practical benchmark harness to reset the dedupe tracker between measured filter runs so acceptance checks remain scenario-isolated.

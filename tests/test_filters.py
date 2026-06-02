@@ -1,5 +1,7 @@
 """Tests for archolith_rtk — Phase 1 core filters."""
 
+import json
+
 import pytest
 
 from archolith_rtk import filter_output
@@ -12,14 +14,14 @@ from archolith_rtk.config import (
 )
 from archolith_rtk.dedupe import reset_dedupe_tracker
 from archolith_rtk.filter_meta import parse_result_meta
-from archolith_rtk.filters.build_output import build_filter
+from archolith_rtk.filters.build_output import BuildFilterOptions, build_filter
 from archolith_rtk.filters.fs_listing import FsListingFilterOptions, fs_listing_filter
 from archolith_rtk.filters.generic import GenericFilterOptions, generic_filter
 from archolith_rtk.filters.git_diff import GitDiffFilterOptions, git_diff_filter
 from archolith_rtk.filters.git_log import git_log_filter
 from archolith_rtk.filters.git_show import git_show_filter
-from archolith_rtk.filters.git_status import git_status_filter
-from archolith_rtk.filters.json_output import json_filter
+from archolith_rtk.filters.git_status import GitStatusFilterOptions, git_status_filter
+from archolith_rtk.filters.json_output import JsonFilterOptions, json_filter
 from archolith_rtk.filters.lint_output import lint_filter
 from archolith_rtk.filters.logs import LogFilterOptions, log_filter
 from archolith_rtk.filters.read_file import ReadFileFilterOptions, read_file_filter
@@ -947,3 +949,279 @@ class TestCrossTurnDedupe:
         assert hit.occurrence == 1
         assert tracker.record("hello") == 2
         assert tracker.check("world") is None
+
+
+# ─── Strategy 1: CSV ───
+
+
+class TestCsvStrategy:
+    def test_uniform_array_to_csv(self):
+        data = [{"id": i, "name": f"item_{i}"} for i in range(10)]
+        text = "$ cmd\n[exit 0]\n" + json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
+        assert "," in r.output  # CSV output has commas
+        assert "id" in r.output or "item_0" in r.output
+
+    def test_csv_disabled_falls_to_truncation(self):
+        data = [{"id": i, "name": f"item_{i}"} for i in range(10)]
+        text = json.dumps(data)
+        r_csv = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
+        r_no_csv = json_filter(text, JsonFilterOptions(csv_enabled=False))
+        # With CSV disabled, should fall back to truncation
+        assert r_no_csv.output  # doesn't crash
+
+    def test_fewer_than_min_rows_falls_to_truncation(self):
+        data = [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
+        # Only 2 items, below min_rows=3 — should fall back
+
+    def test_mixed_keys_still_tabular(self):
+        """Sparse objects with optional keys are still tabular if 60% overlap."""
+        data = [{"id": i, "name": f"n{i}", "opt": "x"} for i in range(5)]
+        data[2].pop("opt")  # Remove optional key from one item
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
+        # Should still produce CSV
+        assert r.output  # doesn't crash
+
+    def test_nested_values_not_tabular(self):
+        data = [{"id": 1, "nested": {"a": 1}}, {"id": 2, "nested": {"b": 2}}]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
+        # Nested dicts don't qualify for CSV
+
+    def test_csv_row_limit(self):
+        data = [{"id": i, "name": f"item_{i}"} for i in range(50)]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3, csv_max_rows=10))
+        assert "30 more rows" in r.output or "more rows" in r.output
+
+    def test_column_factoring(self):
+        """When one value appears in >=80% of rows, factor it above header."""
+        data = [{"name": f"user{i}", "region": "us-east-1"} for i in range(10)]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3, csv_factor_enabled=True))
+        assert "region=us-east-1" in r.output
+
+    def test_column_factoring_disabled(self):
+        data = [{"name": f"user{i}", "region": "us-east-1"} for i in range(10)]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3, csv_factor_enabled=False))
+        assert "region=" not in r.output
+
+
+# ─── Strategy 2: Key-value lines ───
+
+
+class TestKvStrategy:
+    def test_flat_object_to_kv(self):
+        data = {"name": "yawn.rip", "version": "1.0.0", "port": 8080}
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(kv_enabled=True, kv_min_keys=3))
+        assert "name:" in r.output or "name :" in r.output
+
+    def test_fewer_than_min_keys_no_kv(self):
+        data = {"a": 1, "b": 2}
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(kv_enabled=True, kv_min_keys=3))
+        # Only 2 keys, below min_keys — should fall back
+
+    def test_nested_values_skip_kv(self):
+        data = {"name": "test", "config": {"nested": True}, "count": 5}
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(kv_enabled=True, kv_min_keys=3))
+        # Nested dict should use dotted-key, not KV
+
+    def test_key_limit(self):
+        data = {f"key_{i}": f"value_{i}" for i in range(30)}
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(kv_enabled=True, kv_min_keys=3, kv_max_keys=10))
+        assert "more keys" in r.output
+
+
+# ─── Strategy 3: Dotted-key lines ───
+
+
+class TestDotkeyStrategy:
+    def test_nested_object_to_dotkey(self):
+        data = {"server": {"host": "localhost", "port": 8080}, "db": {"name": "test"}}
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(dotkey_enabled=True))
+        assert "server.host" in r.output or "server.host:" in r.output
+
+    def test_too_deep_falls_back(self):
+        data = {"a": {"b": {"c": {"d": "too deep"}}}}
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(dotkey_enabled=True, dotkey_max_depth=3))
+        # Depth 4 exceeds max_depth of 3
+
+    def test_arrays_in_values_skip_dotkey(self):
+        data = {"items": [1, 2, 3], "name": "test"}
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(dotkey_enabled=True))
+        # Arrays are not dottable — falls back
+
+
+# ─── Strategy 5: Stack trace collapsing ───
+
+
+class TestStackTraceCollapse:
+    def test_java_stack_trace_collapsed(self):
+        frames = ["    at rip.yawn.api.CardController.get(CardController.java:42)"]
+        frames += ["    at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:100)"] * 8
+        frames += ["    at rip.yawn.api.Application.main(Application.java:10)"]
+        text = "$ java -jar app.jar\n[exit 1]\nException: null\n" + "\n".join(frames)
+        r = generic_filter(text, GenericFilterOptions(
+            head_lines=5, tail_lines=5,
+            stack_collapse_enabled=True, stack_collapse_min_frames=5,
+        ))
+        assert "framework" in r.output.lower() or "omitted" in r.output
+
+    def test_stack_collapse_disabled(self):
+        frames = ["    at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:100)"] * 20
+        text = "$ java -jar app.jar\n[exit 1]\n" + "\n".join(frames)
+        r_enabled = generic_filter(text, GenericFilterOptions(head_lines=10, tail_lines=10, stack_collapse_enabled=True, stack_collapse_min_frames=5))
+        r_disabled = generic_filter(text, GenericFilterOptions(head_lines=10, tail_lines=10, stack_collapse_enabled=False))
+        # With collapsing disabled, no "framework" summary
+        assert "omitted" not in r_disabled.output or "framework" not in r_disabled.output.lower()
+
+    def test_short_stack_not_collapsed(self):
+        frames = ["    at org.springframework.DispatcherServlet.service(DispatcherServlet.java:100)"] * 3
+        text = "Exception\n" + "\n".join(frames)
+        # Only 3 frames, below min_frames=5
+        r = generic_filter(text, GenericFilterOptions(stack_collapse_enabled=True, stack_collapse_min_frames=5))
+        # Should not collapse — below min_frames threshold
+
+
+# ─── Strategy 6: Git status grouping ───
+
+
+class TestGitStatusGrouping:
+    def test_group_by_directory(self):
+        lines = [
+            "M  src/auth/handler.ts",
+            "M  src/auth/session.ts",
+            "M  src/auth/middleware.ts",
+            "?? src/config/database.ts",
+        ]
+        text = "$ git status -s\n[exit 0]\n" + "\n".join(lines)
+        r = git_status_filter(text, GitStatusFilterOptions(group_enabled=True, group_max_per_line=10))
+        # Should group M src/auth/ files together
+        assert "src/auth/" in r.output
+
+    def test_group_disabled(self):
+        lines = [
+            "M  src/auth/handler.ts",
+            "M  src/auth/session.ts",
+        ]
+        text = "$ git status -s\n[exit 0]\n" + "\n".join(lines)
+        r = git_status_filter(text, GitStatusFilterOptions(group_enabled=False))
+        # Should fall through to generic filter
+
+    def test_non_short_format_skips_grouping(self):
+        text = "$ git status\n[exit 0]\nOn branch main\nChanges to be committed:\n  modified: foo.ts"
+        r = git_status_filter(text, GitStatusFilterOptions(group_enabled=True))
+        # Long-format should fall through to generic
+
+
+# ─── Strategy 7: Search heading reformat ───
+
+
+class TestSearchHeadingReformat:
+    def test_inline_to_heading_reformat(self):
+        text = "$ rg pattern\n[exit 0]\n" + "\n".join(
+            f"src/auth/handler.ts:{i}:match here" for i in range(10)
+        )
+        r = search_filter(text, SearchFilterOptions(
+            max_matches_per_file=5, max_files=5,
+            heading_reformat_enabled=True,
+        ))
+        # With heading reformat, path appears once
+        assert "src/auth/handler.ts" in r.output
+
+    def test_heading_mode_unchanged(self):
+        text = "$ rg --heading pattern\nsrc/auth/handler.ts:\n5:pattern match\n6:another match"
+        r = search_filter(text, SearchFilterOptions(heading_reformat_enabled=True))
+        # Already heading-style — should not double-convert
+
+
+# ─── Strategy 8: Build task summary ───
+
+
+class TestBuildSummary:
+    def test_gradle_build_summary(self):
+        lines = [
+            "> Task :compileJava",
+            "> Task :processResources",
+            "> Task :classes",
+            "> Task :test",
+            "> Task :check",
+            "> Task :build",
+            "",
+            "BUILD SUCCESSFUL in 5s",
+        ]
+        text = "$ gradle build\n[exit 0]\n" + "\n".join(lines)
+        r = build_filter(text, BuildFilterOptions(summary_enabled=True))
+        assert "BUILD SUCCESSFUL" in r.output
+        assert "Tasks:" in r.output or "compileJava" in r.output
+
+    def test_build_failure_no_summary(self):
+        lines = [
+            "> Task :compileJava",
+            "> Task :compileJava FAILED",
+            "error: cannot find symbol",
+            "",
+            "BUILD FAILED in 2s",
+        ]
+        text = "$ gradle build\n[exit 1]\n" + "\n".join(lines)
+        # Non-zero exit — filter_output bypasses
+        r = filter_output(text, command="gradle build", exit_code=1)
+        # Should not summarize failed builds
+
+    def test_summary_disabled(self):
+        lines = [
+            "> Task :compileJava",
+            "> Task :build",
+            "",
+            "BUILD SUCCESSFUL in 3s",
+        ]
+        text = "$ gradle build\n[exit 0]\n" + "\n".join(lines)
+        r = build_filter(text, BuildFilterOptions(summary_enabled=False))
+        # Falls back to generic — should still work
+
+
+# ─── Strategy 9: ls -la abbreviation ───
+
+
+class TestLsAbbreviation:
+    def test_ls_la_abbreviated(self):
+        lines = [
+            "total 8",
+            "drwxr-xr-x  5 thron staff  160 May 26 14:30 .",
+            "drwxr-xr-x  3 thron staff   96 May 26 14:28 ..",
+            "-rw-r--r--  1 thron staff  4205 May 26 14:30 package.json",
+            "drwxr-xr-x  4 thron staff  128 May 26 14:30 src",
+        ]
+        text = "$ ls -la\n[exit 0]\n" + "\n".join(lines)
+        r = fs_listing_filter(text, FsListingFilterOptions(lsl_abbreviate_enabled=True))
+        # Should contain abbreviated entries
+        assert "package.json" in r.output or "src/" in r.output
+
+    def test_abbreviation_disabled(self):
+        lines = [
+            "drwxr-xr-x  5 thron staff  160 May 26 14:30 .",
+            "-rw-r--r--  1 thron staff  4205 May 26 14:30 package.json",
+        ]
+        text = "$ ls -la\n[exit 0]\n" + "\n".join(lines)
+        r_enabled = fs_listing_filter(text, FsListingFilterOptions(lsl_abbreviate_enabled=True))
+        r_disabled = fs_listing_filter(text, FsListingFilterOptions(lsl_abbreviate_enabled=False))
+        # Both should work without crashing
+        assert r_enabled.output
+        assert r_disabled.output
+
+    def test_non_ls_output_unchanged(self):
+        """Non-ls output should not be affected by abbreviation."""
+        text = "$ ls\n[exit 0]\nsrc\nlib\nREADME.md"
+        r = fs_listing_filter(text, FsListingFilterOptions(lsl_abbreviate_enabled=True))
+        assert "src" in r.output

@@ -56,18 +56,18 @@ print(result.truncated)      # whether compression occurred
 |----------|--------|----------|
 | `git-diff` | `git_diff_filter` | Stat/diff split, per-file section compression |
 | `git-log` | `git_log_filter` | Oneline detection + head/tail commit windowing |
-| `git-status` | `git_status_filter` | Short-format pass-through |
+| `git-status` | `git_status_filter` | Short-format prefix grouping by directory + status code |
 | `git-show` | `git_show_filter` | Commit header preserved, diff body compressed |
 | `test` | `filter_test_output` | Tail summary prioritized over verbose per-test output |
-| `build` | `build_filter` | Generic head+tail with build defaults |
+| `build` | `build_filter` | Task summary for successful builds (Gradle/Maven) |
 | `lint` | `lint_filter` | Generic head+tail with lint defaults |
 | `typecheck` | `typecheck_filter` | Generic head+tail with typecheck defaults |
-| `ls-tree` | `fs_listing_filter` | Important-file preservation, tree-style detection |
-| `search` | `search_filter` | File grouping, per-file match capping |
-| `json` | `json_filter` | Recursive value compression, depth/key/array capping |
+| `ls-tree` | `fs_listing_filter` | Important-file preservation, tree-style detection, ls -la abbreviation |
+| `search` | `search_filter` | File grouping, per-file match capping, heading reformat for inline matches |
+| `json` | `json_filter` | Format-switch: CSV, column factoring, key-value, dotted-key, truncation fallback |
 | `logs` | `log_filter` | Duplicate-run collapse, important-line preservation |
 | `read_file` | `read_file_filter` | Structure-aware file compression for imports, comments, CSS, literals, and generated blobs |
-| generic | `generic_filter` | Head+tail windowing, blank collapse, header extraction |
+| generic | `generic_filter` | Head+tail windowing, blank collapse, header extraction, stack trace collapsing |
 
 ### Bypass Rules
 

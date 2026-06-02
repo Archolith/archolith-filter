@@ -28,6 +28,21 @@ def _env_int(name: str, fallback: int, max_val: int | None = None) -> int:
     return n
 
 
+def _env_float(name: str, fallback: float, min_val: float = 0.0, max_val: float = 1.0) -> float:
+    """Read a float env var, returning the default if missing or invalid.
+
+    Clamps to [min_val, max_val].
+    """
+    raw = os.environ.get(name, "")
+    if not raw:
+        return fallback
+    try:
+        n = float(raw)
+    except ValueError:
+        return fallback
+    return max(min_val, min(max_val, n))
+
+
 class FilterRiskLevel(StrEnum):
     """Risk tolerance for context compression."""
 
@@ -71,6 +86,33 @@ class FilterConfig:
     json_max_array_items: int = 5
     json_max_depth: int = 3
     json_max_value_length: int = 80
+    # JSON format-switch knobs (Strategies 1-4)
+    json_csv_enabled: bool = True
+    json_csv_min_rows: int = 3
+    json_csv_max_rows: int = 20
+    json_csv_max_key_length: int = 40
+    json_kv_enabled: bool = True
+    json_kv_min_keys: int = 3
+    json_kv_max_keys: int = 20
+    json_dotkey_enabled: bool = True
+    json_dotkey_max_keys: int = 30
+    json_dotkey_max_depth: int = 3
+    json_csv_factor_enabled: bool = True
+    json_csv_factor_threshold: float = 0.8
+    json_csv_factor_max_columns: int = 3
+    # Strategy 5: stack trace collapsing
+    generic_stack_collapse_enabled: bool = True
+    generic_stack_collapse_min_frames: int = 5
+    generic_stack_collapse_keep_app_frames: int = 2
+    # Strategy 6: git status prefix grouping
+    git_status_group_enabled: bool = True
+    git_status_group_max_per_line: int = 10
+    # Strategy 7: search heading reformat
+    search_heading_reformat_enabled: bool = True
+    # Strategy 8: build task summary
+    build_summary_enabled: bool = True
+    # Strategy 9: ls -la abbreviation
+    fs_lsl_abbreviate_enabled: bool = True
     # read_file compressor knobs
     read_import_collapse: bool = True
     read_blank_line_max: int = 1
@@ -122,6 +164,14 @@ _LOW_RISK_OVERRIDES = {
     "json_max_array_items": 8,
     "json_max_depth": 4,
     "json_max_value_length": 160,
+    "json_csv_max_rows": 30,
+    "json_csv_max_key_length": 60,
+    "json_kv_max_keys": 30,
+    "json_dotkey_max_keys": 40,
+    "json_dotkey_max_depth": 4,
+    "generic_stack_collapse_min_frames": 5,
+    "generic_stack_collapse_keep_app_frames": 3,
+    "git_status_group_max_per_line": 15,
 }
 
 _HIGH_RISK_OVERRIDES = {
@@ -155,6 +205,14 @@ _HIGH_RISK_OVERRIDES = {
     "json_max_array_items": 3,
     "json_max_depth": 2,
     "json_max_value_length": 50,
+    "json_csv_max_rows": 10,
+    "json_csv_max_key_length": 20,
+    "json_kv_max_keys": 15,
+    "json_dotkey_max_keys": 20,
+    "json_dotkey_max_depth": 2,
+    "generic_stack_collapse_min_frames": 3,
+    "generic_stack_collapse_keep_app_frames": 1,
+    "git_status_group_max_per_line": 5,
 }
 
 
@@ -219,16 +277,106 @@ def from_env() -> FilterConfig:
         search_max_files=_env_int("ARCHOLITH_RTK_FILTER_SEARCH_MAX_FILES", base.search_max_files, _MAX_ENTRIES),
         search_head_lines=_env_int("ARCHOLITH_RTK_FILTER_SEARCH_HEAD", base.search_head_lines, _MAX_LINE_LINES),
         search_tail_lines=_env_int("ARCHOLITH_RTK_FILTER_SEARCH_TAIL", base.search_tail_lines, _MAX_LINE_LINES),
-        json_max_keys_per_object=_env_int(
+json_max_keys_per_object=_env_int(
             "ARCHOLITH_RTK_FILTER_JSON_MAX_KEYS", base.json_max_keys_per_object, _MAX_ENTRIES
         ),
         json_max_array_items=_env_int(
             "ARCHOLITH_RTK_FILTER_JSON_MAX_ARRAY", base.json_max_array_items, _MAX_ENTRIES
         ),
-        json_max_depth=_env_int("ARCHOLITH_RTK_FILTER_JSON_MAX_DEPTH", base.json_max_depth, _MAX_DEPTH),
+        json_max_depth=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_MAX_DEPTH", base.json_max_depth, _MAX_DEPTH
+        ),
         json_max_value_length=_env_int(
             "ARCHOLITH_RTK_FILTER_JSON_MAX_VALUE_LEN", base.json_max_value_length, _MAX_VALUE_LENGTH
         ),
+        # JSON format-switch knobs
+        json_csv_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_CSV_ENABLED", 1 if base.json_csv_enabled else 0, 1
+        ) == 1,
+        json_csv_min_rows=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_CSV_MIN_ROWS", base.json_csv_min_rows, _MAX_ENTRIES
+        ),
+        json_csv_max_rows=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_CSV_MAX_ROWS", base.json_csv_max_rows, _MAX_ENTRIES
+        ),
+        json_csv_max_key_length=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_CSV_MAX_KEY_LEN", base.json_csv_max_key_length, _MAX_VALUE_LENGTH
+        ),
+        json_kv_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_KV_ENABLED", 1 if base.json_kv_enabled else 0, 1
+        ) == 1,
+        json_kv_min_keys=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_KV_MIN_KEYS", base.json_kv_min_keys, _MAX_ENTRIES
+        ),
+        json_kv_max_keys=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_KV_MAX_KEYS", base.json_kv_max_keys, _MAX_ENTRIES
+        ),
+        json_dotkey_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_DOTKEY_ENABLED", 1 if base.json_dotkey_enabled else 0, 1
+        ) == 1,
+        json_dotkey_max_keys=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_DOTKEY_MAX_KEYS", base.json_dotkey_max_keys, _MAX_ENTRIES
+        ),
+        json_dotkey_max_depth=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_DOTKEY_MAX_DEPTH", base.json_dotkey_max_depth, _MAX_DEPTH
+        ),
+        json_csv_factor_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_ENABLED", 1 if base.json_csv_factor_enabled else 0, 1
+        ) == 1,
+        json_csv_factor_threshold=_env_float(
+            "ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_THRESHOLD",
+            base.json_csv_factor_threshold,
+            0.0,
+            1.0,
+        ),
+        json_csv_factor_max_columns=_env_int(
+            "ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_MAX_COLS", base.json_csv_factor_max_columns, 10
+        ),
+        # Stack trace collapsing knobs
+        generic_stack_collapse_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_ENABLED",
+            1 if base.generic_stack_collapse_enabled else 0,
+            1,
+        ) == 1,
+        generic_stack_collapse_min_frames=_env_int(
+            "ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_MIN_FRAMES",
+            base.generic_stack_collapse_min_frames,
+            _MAX_LINE_LINES,
+        ),
+        generic_stack_collapse_keep_app_frames=_env_int(
+            "ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_KEEP_APP",
+            base.generic_stack_collapse_keep_app_frames,
+            _MAX_LINE_LINES,
+        ),
+        # Git status prefix grouping knobs
+        git_status_group_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_GIT_STATUS_GROUP_ENABLED",
+            1 if base.git_status_group_enabled else 0,
+            1,
+        ) == 1,
+        git_status_group_max_per_line=_env_int(
+            "ARCHOLITH_RTK_FILTER_GIT_STATUS_GROUP_MAX",
+            base.git_status_group_max_per_line,
+            _MAX_ENTRIES,
+        ),
+        # Search heading reformat knob
+        search_heading_reformat_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_SEARCH_HEADING_REFORMAT_ENABLED",
+            1 if base.search_heading_reformat_enabled else 0,
+            1,
+        ) == 1,
+        # Build task summary knob
+        build_summary_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_BUILD_SUMMARY_ENABLED",
+            1 if base.build_summary_enabled else 0,
+            1,
+        ) == 1,
+        # ls -la abbreviation knob
+        fs_lsl_abbreviate_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_FS_LSL_ABBREVIATE_ENABLED",
+            1 if base.fs_lsl_abbreviate_enabled else 0,
+            1,
+        ) == 1,
         read_import_collapse=_env_int(
             "ARCHOLITH_RTK_FILTER_READ_IMPORTS_COLLAPSE", 1 if base.read_import_collapse else 0, 1
         ) == 1,
@@ -283,6 +431,9 @@ def boost_for_verbose(cfg: FilterConfig) -> FilterConfig:
         search_tail_lines=min(cfg.search_tail_lines * m, _MAX_LINE_LINES),
         json_max_keys_per_object=min(cfg.json_max_keys_per_object * m, _MAX_ENTRIES),
         json_max_array_items=min(cfg.json_max_array_items * m, _MAX_ENTRIES),
+        json_csv_max_rows=min(cfg.json_csv_max_rows * m, _MAX_ENTRIES),
+        json_kv_max_keys=min(cfg.json_kv_max_keys * m, _MAX_ENTRIES),
+        json_dotkey_max_keys=min(cfg.json_dotkey_max_keys * m, _MAX_ENTRIES),
     )
 
 

@@ -6,7 +6,7 @@ archolith-rtk is a deterministic Token Reduction Toolkit for LLM agent contexts.
 
 The library is organized into three layers:
 
-1. **Layer 1 — Output Filters**: Compress tool results before they enter the model context. 13 shell-command categories plus tool-routed `read_file` compression decide which filter strategy to apply.
+1. **Layer 1 — Output Filters**: Compress tool results before they enter the model context. 13 shell-command categories plus tool-routed `read_file` compression decide which filter strategy to apply. Nine format-switch strategies (CSV, key-value, dotted-key, column factoring, stack trace collapsing, git status grouping, search heading reformat, build task summary, ls -la abbreviation) provide denser representations when the data shape allows, falling back to truncation when format-switch output isn't shorter.
 2. **Layer 2 — Shrink**: Truncate oversized tool-role messages in conversation history. Supports both char-based and token-based budgets.
 3. **Layer 3 — Agent-Solo Turn Compression**: Four composable strategies (A-D) that reduce token footprint of tool-call continuation turns. These run on agent-solo turns (where the last message is a tool result, not a user message) and apply mechanical savings without an LLM call.
 
@@ -64,17 +64,17 @@ Tool output text
 |--------|----------|----------|
 | `git_diff.py` | git-diff | Stat/diff split, per-file section compression |
 | `git_log.py` | git-log | Oneline detection + head/tail commit windowing |
-| `git_status.py` | git-status | Short-format pass-through |
+| `git_status.py` | git-status | Short-format prefix grouping by directory + status code (Strategy 6) |
 | `git_show.py` | git-show | Commit header preserved, diff body compressed |
 | `test_run_output.py` | test | Tail summary prioritized over verbose per-test output |
-| `build_output.py` | build | Generic head+tail with build defaults |
+| `build_output.py` | build | Task summary for successful Gradle/Maven builds (Strategy 8) |
 | `lint_output.py` | lint | Generic head+tail with lint defaults |
 | `typecheck_output.py` | typecheck | Generic head+tail with typecheck defaults |
-| `fs_listing.py` | ls-tree | Important-file preservation, tree-style detection |
-| `search.py` | search | File grouping, per-file match capping |
-| `json_output.py` | json | Recursive value compression, depth/key/array capping |
+| `fs_listing.py` | ls-tree | Important-file preservation, tree-style detection, ls -la abbreviation (Strategy 9) |
+| `search.py` | search | File grouping, per-file match capping, heading-style reformat for inline matches (Strategy 7) |
+| `json_output.py` | json | Format-switch compression: CSV (Strategy 1), column factoring (Strategy 4), key-value lines (Strategy 2), dotted-key lines (Strategy 3), recursive truncation fallback |
 | `logs.py` | logs | Duplicate-run collapse, important-line preservation |
-| `generic.py` | generic | Head+tail windowing, blank collapse, header extraction |
+| `generic.py` | generic | Head+tail windowing, blank collapse, header extraction, stack trace collapsing (Strategy 5) |
 | `read_file.py` | read_file | Structure-aware file-content compression for imports, comments, CSS, literals, and generated blobs |
 
 ### Layer 1 — config.py
@@ -187,6 +187,27 @@ All env vars use the prefix `ARCHOLITH_RTK_FILTER_`:
 | `ARCHOLITH_RTK_FILTER_JSON_MAX_ARRAY` | Max JSON array items | 5 |
 | `ARCHOLITH_RTK_FILTER_JSON_MAX_DEPTH` | Max JSON recursion depth | 3 |
 | `ARCHOLITH_RTK_FILTER_JSON_MAX_VALUE_LEN` | Max JSON value length | 80 |
+| `ARCHOLITH_RTK_FILTER_JSON_CSV_ENABLED` | Enable CSV format-switch for tabular arrays | 1 |
+| `ARCHOLITH_RTK_FILTER_JSON_CSV_MIN_ROWS` | Min rows for CSV format-switch | 3 |
+| `ARCHOLITH_RTK_FILTER_JSON_CSV_MAX_ROWS` | Max rows in CSV output | 20 |
+| `ARCHOLITH_RTK_FILTER_JSON_CSV_MAX_KEY_LEN` | Max CSV key length | 40 |
+| `ARCHOLITH_RTK_FILTER_JSON_KV_ENABLED` | Enable key-value format-switch | 1 |
+| `ARCHOLITH_RTK_FILTER_JSON_KV_MIN_KEYS` | Min keys for key-value format-switch | 3 |
+| `ARCHOLITH_RTK_FILTER_JSON_KV_MAX_KEYS` | Max keys in key-value output | 20 |
+| `ARCHOLITH_RTK_FILTER_JSON_DOTKEY_ENABLED` | Enable dotted-key format-switch | 1 |
+| `ARCHOLITH_RTK_FILTER_JSON_DOTKEY_MAX_KEYS` | Max keys in dotted-key output | 30 |
+| `ARCHOLITH_RTK_FILTER_JSON_DOTKEY_MAX_DEPTH` | Max depth for dotted-key flattening | 3 |
+| `ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_ENABLED` | Enable CSV column factoring | 1 |
+| `ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_THRESHOLD` | Dominant value threshold for factoring | 0.8 |
+| `ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_MAX_COLS` | Max factored columns | 3 |
+| `ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_ENABLED` | Enable stack trace frame collapsing | 1 |
+| `ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_MIN_FRAMES` | Min frames for stack collapsing | 5 |
+| `ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_KEEP_APP` | App frames to keep at start/end | 2 |
+| `ARCHOLITH_RTK_FILTER_GIT_STATUS_GROUP_ENABLED` | Enable git status prefix grouping | 1 |
+| `ARCHOLITH_RTK_FILTER_GIT_STATUS_GROUP_MAX` | Max files per grouped line | 10 |
+| `ARCHOLITH_RTK_FILTER_SEARCH_HEADING_REFORMAT_ENABLED` | Enable search heading reformat | 1 |
+| `ARCHOLITH_RTK_FILTER_BUILD_SUMMARY_ENABLED` | Enable build task summary | 1 |
+| `ARCHOLITH_RTK_FILTER_FS_LSL_ABBREVIATE_ENABLED` | Enable ls -la abbreviation | 1 |
 | `ARCHOLITH_RTK_FILTER_READ_IMPORTS_COLLAPSE` | Collapse large import blocks | 1 |
 | `ARCHOLITH_RTK_FILTER_READ_BLANK_LINE_MAX` | Max consecutive blank lines kept in `read_file` output | 1 |
 | `ARCHOLITH_RTK_FILTER_READ_COMMENT_THRESHOLD` | Comment-run collapse threshold for `read_file` output | 10 |

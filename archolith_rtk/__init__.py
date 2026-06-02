@@ -145,7 +145,8 @@ def _category_filter(
         ))
     if category == "git-status":
         return git_status_filter(formatted, GitStatusFilterOptions(
-            head_lines=cfg.git_status_head, tail_lines=cfg.git_status_tail
+            head_lines=cfg.git_status_head, tail_lines=cfg.git_status_tail,
+            group_enabled=cfg.git_status_group_enabled, group_max_per_line=cfg.git_status_group_max_per_line,
         ))
     if category == "test":
         return filter_test_output(formatted, TestFilterOptions(
@@ -153,7 +154,8 @@ def _category_filter(
         ))
     if category == "build":
         return build_filter(formatted, BuildFilterOptions(
-            head_lines=cfg.build_head, tail_lines=cfg.build_tail
+            head_lines=cfg.build_head, tail_lines=cfg.build_tail,
+            summary_enabled=cfg.build_summary_enabled,
         ))
     if category == "lint":
         return lint_filter(formatted, LintFilterOptions(
@@ -165,7 +167,8 @@ def _category_filter(
         ))
     if category == "ls-tree":
         return fs_listing_filter(formatted, FsListingFilterOptions(
-            max_entries=cfg.fs_max_entries, head_lines=cfg.fs_head_lines, tail_lines=cfg.fs_tail_lines
+            max_entries=cfg.fs_max_entries, head_lines=cfg.fs_head_lines, tail_lines=cfg.fs_tail_lines,
+            lsl_abbreviate_enabled=cfg.fs_lsl_abbreviate_enabled,
         ))
     if category == "search":
         return search_filter(formatted, SearchFilterOptions(
@@ -173,6 +176,7 @@ def _category_filter(
             max_files=cfg.search_max_files,
             head_lines=cfg.search_head_lines,
             tail_lines=cfg.search_tail_lines,
+            heading_reformat_enabled=cfg.search_heading_reformat_enabled,
         ))
     if category == "json":
         return json_filter(formatted, JsonFilterOptions(
@@ -180,6 +184,19 @@ def _category_filter(
             max_array_items=cfg.json_max_array_items,
             max_depth=cfg.json_max_depth,
             max_value_length=cfg.json_max_value_length,
+            csv_enabled=cfg.json_csv_enabled,
+            csv_min_rows=cfg.json_csv_min_rows,
+            csv_max_rows=cfg.json_csv_max_rows,
+            csv_max_key_length=cfg.json_csv_max_key_length,
+            kv_enabled=cfg.json_kv_enabled,
+            kv_min_keys=cfg.json_kv_min_keys,
+            kv_max_keys=cfg.json_kv_max_keys,
+            dotkey_enabled=cfg.json_dotkey_enabled,
+            dotkey_max_keys=cfg.json_dotkey_max_keys,
+            dotkey_max_depth=cfg.json_dotkey_max_depth,
+            csv_factor_enabled=cfg.json_csv_factor_enabled,
+            csv_factor_threshold=cfg.json_csv_factor_threshold,
+            csv_factor_max_columns=cfg.json_csv_factor_max_columns,
         ))
     if category == "logs":
         return log_filter(formatted, LogFilterOptions(
@@ -198,7 +215,10 @@ def _category_filter(
         ))
     # Default: generic
     return generic_filter(formatted, GenericFilterOptions(
-        head_lines=cfg.generic_head, tail_lines=cfg.generic_tail
+        head_lines=cfg.generic_head, tail_lines=cfg.generic_tail,
+        stack_collapse_enabled=cfg.generic_stack_collapse_enabled,
+        stack_collapse_min_frames=cfg.generic_stack_collapse_min_frames,
+        stack_collapse_keep_app_frames=cfg.generic_stack_collapse_keep_app_frames,
     ))
 
 
