@@ -249,3 +249,362 @@ def get_read_file_fixture_heavy_text() -> str:
         ]
     )
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Format-switch strategy corpora (Strategies 1–9)
+# ---------------------------------------------------------------------------
+
+
+def get_csv_tabular_json_text() -> str:
+    """Strategy 1/4: Large JSON array of uniform objects → CSV + column factoring."""
+    import json
+
+    items = []
+    for i in range(40):
+        items.append(
+            {
+                "id": f"card_{i:04d}",
+                "name": f"Pokemon Card {i}",
+                "set": "Base Set" if i % 3 == 0 else "Jungle" if i % 3 == 1 else "Fossil",
+                "rarity": "common" if i % 5 != 0 else "rare",
+                "price_usd": round(0.5 + i * 0.3, 2),
+                "condition": "NM" if i % 4 != 0 else "LP",
+            }
+        )
+    return json.dumps(items)
+
+
+def get_kv_flat_object_text() -> str:
+    """Strategy 2: Large flat JSON object → key-value lines."""
+    import json
+
+    obj = {}
+    for i in range(60):
+        obj[f"setting_{i}"] = f"value_with_some_padding_{i}_to_make_keys_longer"
+    obj["important_key"] = "must_preserve_this"
+    return json.dumps(obj)
+
+
+def get_nested_json_dotted_text() -> str:
+    """Strategy 3: Nested JSON object → dotted-key lines."""
+    import json
+
+    obj = {
+        "service": {
+            "name": "archolith-rtk",
+            "version": "1.2.3",
+            "config": {
+                "max_tokens": 4096,
+                "risk_level": "balanced",
+                "features": {
+                    "csv_enabled": True,
+                    "kv_enabled": True,
+                    "stack_collapse": True,
+                },
+            },
+        },
+        "deployment": {
+            "region": "us-east-1",
+            "environment": "production",
+            "replicas": 3,
+            "health_check": {
+                "interval_ms": 5000,
+                "timeout_ms": 3000,
+            },
+        },
+        "metrics": {
+            "requests_total": 1_234_567,
+            "errors_total": 42,
+            "latency_p50_ms": 120,
+            "latency_p99_ms": 850,
+        },
+        "endpoints": [
+            {"path": "/api/v1/cards", "method": "GET", "timeout_ms": 5000},
+            {"path": "/api/v1/prices", "method": "GET", "timeout_ms": 3000},
+            {"path": "/api/v1/sets", "method": "GET", "timeout_ms": 4000},
+        ],
+        "filters": {
+            "json_filter": {
+                "csv_enabled": True,
+                "max_array_items": 20,
+                "max_keys_per_object": 50,
+                "max_depth": 6,
+            },
+            "git_filter": {
+                "group_enabled": True,
+                "head_lines": 20,
+                "tail_lines": 15,
+            },
+            "search_filter": {
+                "max_files": 15,
+                "heading_enabled": True,
+            },
+        },
+        "database": {
+            "host": "db.archolith.dev",
+            "port": 5432,
+            "name": "rtk_production",
+            "pool_size": 10,
+            "connection_timeout_ms": 5000,
+            "ssl": True,
+            "ssl_cert_path": "/etc/ssl/certs/db-ca.pem",
+        },
+    }
+    return json.dumps(obj, indent=2)
+
+
+def get_stack_trace_java_text() -> str:
+    """Strategy 5: Java stack trace with many framework frames → collapse."""
+    lines = [
+        "$ java -jar app.jar",
+        "[exit 1]",
+    ]
+    # Core exception line
+    lines.append(
+        "Exception in thread 'main' "
+        "rip.yawn.api.CardNotFoundException: Card pk001 not found"
+    )
+    # Application frame (kept)
+    lines.append(
+        "    at rip.yawn.api.controller.v1.CardController.getById("
+        "CardController.java:45)"
+    )
+    # Framework frames (collapsed)
+    spring_frames = [
+        (
+            "    at org.springframework.web.method.support."
+            "InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:205)"
+        ),
+        (
+            "    at org.springframework.web.method.support."
+            "InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:150)"
+        ),
+        (
+            "    at org.springframework.web.servlet.mvc.method.annotation."
+            "ServletInvocableHandlerMethod.invokeAndHandle("
+            "ServletInvocableHandlerMethod.java:117)"
+        ),
+        (
+            "    at org.springframework.web.servlet.mvc.method.annotation."
+            "RequestMappingHandlerAdapter.invokeHandlerMethod("
+            "RequestMappingHandlerAdapter.java:895)"
+        ),
+        (
+            "    at org.springframework.web.servlet.mvc.method.annotation."
+            "RequestMappingHandlerAdapter.handleInternal("
+            "RequestMappingHandlerAdapter.java:808)"
+        ),
+        (
+            "    at org.springframework.web.servlet.mvc.method."
+            "AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87)"
+        ),
+        (
+            "    at org.springframework.web.servlet.DispatcherServlet."
+            "doDispatch(DispatcherServlet.java:1072)"
+        ),
+        (
+            "    at org.springframework.web.servlet.DispatcherServlet."
+            "doService(DispatcherServlet.java:965)"
+        ),
+    ]
+    jdk_frames = [
+        "    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)",
+        (
+            "    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke("
+            "NativeMethodAccessorImpl.java:62)"
+        ),
+        (
+            "    at jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke("
+            "DelegatingMethodAccessorImpl.java:43)"
+        ),
+        "    at java.lang.reflect.Method.invoke(Method.java:566)",
+    ]
+    tomcat_frames = [
+        (
+            "    at org.apache.catalina.core.ApplicationFilterChain."
+            "internalDoFilter(ApplicationFilterChain.java:228)"
+        ),
+        (
+            "    at org.apache.catalina.core.ApplicationFilterChain."
+            "doFilter(ApplicationFilterChain.java:166)"
+        ),
+        "    at javax.servlet.http.HttpServlet.service(HttpServlet.java:655)",
+        (
+            "    at org.springframework.web.servlet.FrameworkServlet."
+            "service(FrameworkServlet.java:883)"
+        ),
+        "    at javax.servlet.http.HttpServlet.service(HttpServlet.java:764)",
+    ]
+    lines.extend(jdk_frames)
+    lines.extend(spring_frames)
+    lines.extend(tomcat_frames)
+    lines.append(
+        "    at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable."
+        "run(TaskThread.java:61)"
+    )
+    lines.append("    at java.lang.Thread.run(Thread.java:829)")
+    lines.append("")
+    lines.append("2026-06-02 10:15:32 ERROR [CardService] Failed to fetch card pk001")
+    lines.append(
+        "2026-06-02 10:15:33 INFO  [CardService] Retrying with fallback data source"
+    )
+    return "\n".join(lines)
+    return "\n".join(lines)
+
+
+def get_stack_trace_python_text() -> str:
+    """Strategy 5: Python stack trace with many stdlib frames → collapse."""
+    lines = [
+        "$ python app.py",
+        "[exit 1]",
+        "Traceback (most recent call last):",
+        '  File "/app/rip/yawn/api/controller.py", line 45, in get_card',
+        "    card = card_service.find_by_id(card_id)",
+        '  File "/app/rip/yawn/service/card_service.py", line 112, in find_by_id',
+        "    return self._repository.query(card_id)",
+        '  File "/app/rip/yawn/infrastructure/repository.py", line 88, in query',
+        "    raise CardNotFoundError(f'Card {card_id} not found')",
+        "rip.yawn.infrastructure.repository.CardNotFoundError: Card pk001 not found",
+        "",
+        "During handling of the above, another exception occurred:",
+        "",
+        "Traceback (most recent call last):",
+        '  File "/usr/lib/python3.11/logging/__init__.py", line 1490, in callHandlers',
+        "    hdlr.handle(record)",
+        '  File "/usr/lib/python3.11/logging/__init__.py", line 938, in handle',
+        "    self.emit(record)",
+        '  File "/usr/lib/python3.11/logging/handlers.py", line 72, in emit',
+        "    self.handleError(record)",
+        '  File "/usr/lib/python3.11/logging/__init__.py", line 968, in handleError',
+        "    sys.stderr.write(record.getMessage())",
+        '  File "/usr/lib/python3.11/logging/__init__.py", line 1460, in getMessage',
+        "    msg = str(msg)",
+        "ValueError: Unterminated string",
+        "",
+        "The above exception was the direct cause of the following exception:",
+        "",
+        "Traceback (most recent call last):",
+        '  File "/usr/lib/python3.11/logging/__init__.py", line 1490, in callHandlers',
+        "    hdlr.handle(record)",
+        '  File "/usr/lib/python3.11/logging/__init__.py", line 938, in handle',
+        "    self.emit(record)",
+        '  File "/usr/lib/python3.11/logging/handlers.py", line 72, in emit',
+        "    self.handleError(record)",
+        '  File "/usr/lib/python3.11/logging/__init__.py", line 968, in handleError',
+        "    sys.stderr.write(record.getMessage())",
+        '  File "/usr/lib/python3.11/logging/__init__.py", line 1460, in getMessage',
+        "    msg = str(msg)",
+        "ValueError: Unterminated string in logging formatter",
+        "",
+        "Additional debug output from the Python application showing",
+        "various internal state information, connection pool status,",
+        "and configuration parameters that were active at the time",
+        "of the crash. This padding makes the corpus large enough",
+        "to trigger meaningful compression at all risk levels.",
+    ]
+    return "\n".join(lines)
+
+
+def get_git_status_short_text() -> str:
+    """Strategy 6: git status short-format output → grouped by directory + status code."""
+    lines = [
+        "$ git status -s",
+        "[exit 0]",
+    ]
+    # Add enough files in same directories to make grouping worthwhile
+    for i in range(15):
+        lines.append(f"M  src/api/file_{i}.py")
+    for i in range(10):
+        lines.append(f"M  src/service/handler_{i}.py")
+    for i in range(8):
+        lines.append(f"M  tests/unit/test_{i}.py")
+    for i in range(5):
+        lines.append(f"?? src/experiments/exp_{i}.py")
+    lines.append("?? data/temp.json")
+    return "\n".join(lines)
+
+
+def get_gradle_build_success_text() -> str:
+    """Strategy 8: Successful Gradle build output → compact task summary."""
+    lines = [
+        "$ gradle build",
+        "",
+        "> Task :compileJava",
+        "> Task :processResources",
+        "> Task :classes",
+        "> Task :jar",
+        "> Task :compileTestJava",
+        "> Task :processTestResources",
+        "> Task :testClasses",
+        "> Task :test",
+        "> Task :integrationTest",
+        "> Task :check",
+        "> Task :javadoc",
+        "> Task :javadocJar",
+        "> Task :sourcesJar",
+        "> Task :assemble",
+        "> Task :build",
+        "",
+        "BUILD SUCCESSFUL in 12s",
+        "15 actionable tasks: 15 executed",
+        "",
+        "[exit 0]",
+        "",
+        "Additional output from the Gradle build process showing",
+        "various compilation steps, resource processing, test runs",
+        "and final assembly of the application artifact for deployment.",
+        "This output is included to make the corpus large enough",
+        "to trigger meaningful compression at low risk levels.",
+        "The build process ran on the CI server with Java 17 and",
+        "Gradle 8.5. All tests passed successfully with 42 test",
+        "cases executed across 3 test suites in 8.2 seconds.",
+        "Code coverage report generated at build/reports/jacoco/",
+        "total line coverage: 87.3%, branch coverage: 72.1%.",
+    ]
+    return "\n".join(lines)
+
+
+def get_gradle_build_success_verbose_text() -> str:
+    """Strategy 8: Verbose successful Gradle build with many tasks + warnings."""
+    lines = ["$ gradle build --info", ""]
+    tasks = [
+        "compileJava", "compileKotlin", "processResources", "classes",
+        "compileTestJava", "compileTestKotlin", "processTestResources", "testClasses",
+        "test", "integrationTest", "check", "jar", "bootJar",
+        "javadoc", "javadocJar", "sourcesJar",
+        "assemble", "build",
+    ]
+    for t in tasks:
+        lines.append(f"> Task :{t}")
+    lines.append("")
+    lines.append("warning: [options] source value 11 is deprecated and will be removed in a future release")
+    lines.append("warning: [deprecation] CardRepository.query() is deprecated: use findById() instead")
+    lines.append("2 warnings")
+    lines.append("")
+    lines.append("BUILD SUCCESSFUL in 45s")
+    lines.append(f"{len(tasks)} actionable tasks: {len(tasks)} executed")
+    lines.append("")
+    lines.append("[exit 0]")
+    return "\n".join(lines)
+
+
+def get_ls_la_text() -> str:
+    """Strategy 9: ls -la directory listing → abbreviated form."""
+    result_lines = ["total 48"]
+    result_lines.append("drwxr-xr-x  8 thron staff  256 May 26 14:30 .")
+    result_lines.append("drwxr-xr-x  5 thron staff  160 May 26 14:30 ..")
+    result_lines.append("-rw-r--r--  1 thron staff  4205 May 26 14:30 package.json")
+    result_lines.append("-rw-r--r--  1 thron staff  1052 May 22 09:15 tsconfig.json")
+    result_lines.append("-rw-r--r--  1 thron staff  87432 May 26 14:30 yarn.lock")
+    result_lines.append("drwxr-xr-x  3 thron staff   96 May 26 14:30 src")
+    result_lines.append("drwxr-xr-x  4 thron staff  128 May 22 09:15 lib")
+    result_lines.append("-rw-r--r--  1 thron staff   682 May 22 09:15 .gitignore")
+    result_lines.append("-rw-r--r--  1 thron staff  1532 May 26 14:30 README.md")
+    result_lines.append("-rw-r--r--  1 thron staff   524 May 22 09:15 Makefile")
+    result_lines.append("lrwxr-xr-x  1 thron staff    12 May 26 14:30 node_modules -> .cache/nm")
+    for i in range(20):
+        ext = ".py" if i % 3 != 0 else ".ts"
+        size = 500 + i * 200
+        result_lines.append(f"-rw-r--r--  1 thron staff  {size:>5} May 26 14:30 module_{i}{ext}")
+    return "\n".join(result_lines)

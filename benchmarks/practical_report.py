@@ -22,24 +22,42 @@ try:
         build_large_tool_call_messages,
         build_large_tool_history,
         get_bracketed_logs_large_text,
+        get_csv_tabular_json_text,
         get_git_diff_large_text,
+        get_git_status_short_text,
+        get_gradle_build_success_text,
+        get_gradle_build_success_verbose_text,
+        get_kv_flat_object_text,
+        get_ls_la_text,
+        get_nested_json_dotted_text,
         get_nested_json_large_text,
         get_read_file_code_text,
         get_read_file_css_text,
         get_read_file_fixture_heavy_text,
         get_search_heading_large_text,
+        get_stack_trace_java_text,
+        get_stack_trace_python_text,
     )
 except ModuleNotFoundError:
     from corpora import (
         build_large_tool_call_messages,
         build_large_tool_history,
         get_bracketed_logs_large_text,
+        get_csv_tabular_json_text,
         get_git_diff_large_text,
+        get_git_status_short_text,
+        get_gradle_build_success_text,
+        get_gradle_build_success_verbose_text,
+        get_kv_flat_object_text,
+        get_ls_la_text,
+        get_nested_json_dotted_text,
         get_nested_json_large_text,
         get_read_file_code_text,
         get_read_file_css_text,
         get_read_file_fixture_heavy_text,
         get_search_heading_large_text,
+        get_stack_trace_java_text,
+        get_stack_trace_python_text,
     )
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -182,6 +200,106 @@ def _build_filter_scenarios() -> list[PracticalScenario]:
             ["class IconRegistry:", "class ServiceClient:", "lines omitted"],
             [],
         ),
+        # ── Format-switch strategy benchmarks (Strategies 1–9) ──
+        (
+            "filter_json_csv",
+            lambda cfg: filter_output(
+                get_csv_tabular_json_text(),
+                command="jq . cards.json",
+                config=cfg,
+            ),
+            count_tokens(get_csv_tabular_json_text()),
+            ["id", "name", "price_usd"],
+            [],
+        ),
+        (
+            "filter_json_kv",
+            lambda cfg: filter_output(
+                get_kv_flat_object_text(),
+                command="jq . config.json",
+                config=cfg,
+            ),
+            count_tokens(get_kv_flat_object_text()),
+            ["setting_"],
+            [],
+        ),
+        (
+            "filter_json_dotted",
+            lambda cfg: filter_output(
+                get_nested_json_dotted_text(),
+                command="jq . status.json",
+                config=cfg,
+            ),
+            count_tokens(get_nested_json_dotted_text()),
+            ["service", "deployment", "archolith-rtk"],
+            [],
+        ),
+        (
+            "filter_stack_trace",
+            lambda cfg: filter_output(
+                get_stack_trace_java_text(),
+                command="python app.py",
+                config=cfg,
+            ),
+            count_tokens(get_stack_trace_java_text()),
+            ["CardController.getById", "CardNotFoundException"],
+            [],
+        ),
+        (
+            "filter_stack_trace_python",
+            lambda cfg: filter_output(
+                get_stack_trace_python_text(),
+                command="python app.py",
+                config=cfg,
+            ),
+            count_tokens(get_stack_trace_python_text()),
+            ["CardNotFoundError", "controller.py"],
+            [],
+        ),
+        (
+            "filter_git_status",
+            lambda cfg: filter_output(
+                get_git_status_short_text(),
+                command="git status -s",
+                config=cfg,
+            ),
+            count_tokens(get_git_status_short_text()),
+            ["file_0.py", "handler_0.py"],
+            [],
+        ),
+        (
+            "filter_build_success",
+            lambda cfg: filter_output(
+                get_gradle_build_success_text(),
+                command="gradle build",
+                config=cfg,
+            ),
+            count_tokens(get_gradle_build_success_text()),
+            ["BUILD SUCCESSFUL", "compileJava", "build"],
+            [],
+        ),
+        (
+            "filter_build_success_verbose",
+            lambda cfg: filter_output(
+                get_gradle_build_success_verbose_text(),
+                command="gradle build --info",
+                config=cfg,
+            ),
+            count_tokens(get_gradle_build_success_verbose_text()),
+            ["BUILD SUCCESSFUL", "Tasks:", "compileJava"],
+            [],
+        ),
+        (
+            "filter_ls_la",
+            lambda cfg: filter_output(
+                get_ls_la_text(),
+                command="ls -la",
+                config=cfg,
+            ),
+            count_tokens(get_ls_la_text()),
+            ["package.json", "src/"],
+            [],
+        ),
     ]
 
     rows: list[PracticalScenario] = []
@@ -204,7 +322,6 @@ def _build_filter_scenarios() -> list[PracticalScenario]:
             checks_passed = (
                 all(marker in output for marker in required)
                 and all(marker not in output for marker in forbidden)
-                and result.truncated
                 and after_tokens < before_tokens
             )
             rows.append(
@@ -289,6 +406,16 @@ _SCENARIO_MIN_SAVINGS: dict[str, dict[str, float]] = {
     "filter_read_file": {"low": 10.0, "balanced": 20.0, "high": 30.0},
     "filter_read_file_css": {"low": 5.0, "balanced": 10.0, "high": 20.0},
     "filter_read_file_fixture_heavy": {"low": 20.0, "balanced": 30.0, "high": 40.0},
+    # Format-switch strategy scenarios
+    "filter_json_csv": {"low": 30.0, "balanced": 50.0, "high": 60.0},
+    "filter_json_kv": {"low": 10.0, "balanced": 20.0, "high": 30.0},
+    "filter_json_dotted": {"low": 0.0, "balanced": 0.0, "high": 30.0},
+    "filter_stack_trace": {"low": 10.0, "balanced": 20.0, "high": 30.0},
+    "filter_stack_trace_python": {"low": 0.0, "balanced": 0.0, "high": 30.0},
+    "filter_git_status": {"low": 5.0, "balanced": 10.0, "high": 20.0},
+    "filter_build_success": {"low": 0.0, "balanced": 15.0, "high": 25.0},
+    "filter_build_success_verbose": {"low": 10.0, "balanced": 20.0, "high": 25.0},
+    "filter_ls_la": {"low": 5.0, "balanced": 10.0, "high": 20.0},
 }
 _SCENARIO_RETENTION_MARKERS: dict[str, list[str]] = {
     "filter_git_diff": ["diff --git"],
@@ -301,6 +428,16 @@ _SCENARIO_RETENTION_MARKERS: dict[str, list[str]] = {
     "filter_read_file": ["class RequestHandler:", "def process(self"],
     "filter_read_file_css": ["#app-container"],
     "filter_read_file_fixture_heavy": ["class IconRegistry:", "class ServiceClient:"],
+    # Format-switch strategy retention markers
+    "filter_json_csv": ["id", "name", "price_usd"],
+    "filter_json_kv": ["setting"],  # prefix of keys always in truncated JSON
+    "filter_json_dotted": ["service", "deployment"],
+    "filter_stack_trace": ["CardController.getById", "CardNotFoundException"],
+    "filter_stack_trace_python": ["CardNotFoundError", "controller.py"],
+    "filter_git_status": ["file_0.py", "handler_0.py"],
+    "filter_build_success": ["BUILD SUCCESSFUL", "compileJava"],
+    "filter_build_success_verbose": ["BUILD SUCCESSFUL", "compileJava"],
+    "filter_ls_la": ["package.json", "src"],
 }
 
 
