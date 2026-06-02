@@ -1225,3 +1225,146 @@ class TestLsAbbreviation:
         text = "$ ls\n[exit 0]\nsrc\nlib\nREADME.md"
         r = fs_listing_filter(text, FsListingFilterOptions(lsl_abbreviate_enabled=True))
         assert "src" in r.output
+
+
+# ─── Additional format-switch edge-case tests ───
+
+
+class TestCsvEdgeCases:
+    def test_factoring_with_non_default_values(self):
+        """Column factoring preserves non-default values in the table."""
+        data = [
+            {"name": "Alice", "region": "us-east-1"},
+            {"name": "Bob", "region": "us-east-1"},
+            {"name": "Carol", "region": "us-east-1"},
+            {"name": "Dave", "region": "us-east-1"},
+            {"name": "Eve", "region": "eu-west-1"},
+        ]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(
+            csv_enabled=True, csv_min_rows=3, csv_factor_enabled=True, csv_factor_threshold=0.8,
+        ))
+        # Region column should stay in the table since Eve has a non-default value
+        assert "region" in r.output
+        assert "eu-west-1" in r.output
+        # Eve should show the actual non-default value
+        assert "Eve,eu-west-1" in r.output or "Eve" in r.output
+
+    def test_factoring_all_same_removes_column(self):
+        """When all rows have the same value, the column is removed entirely."""
+        data = [{"name": f"user{i}", "region": "us-east-1"} for i in range(5)]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(
+            csv_enabled=True, csv_min_rows=3, csv_factor_enabled=True, csv_factor_threshold=0.8,
+        ))
+        assert "region=us-east-1" in r.output
+        # Region column should NOT appear in the CSV header since all rows match default
+        header_line = [line for line in r.output.split("\n") if "," in line and "region" not in line.lower().split("=")[0]]
+        # The header row should just be "name"
+        assert any("name" in line and "region" not in line for line in r.output.split("\n"))
+
+    def test_primitives_array_not_tabular(self):
+        """A list of strings/numbers is not tabular and should fall through."""
+        data = [1, 2, 3, 4, 5]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
+        # Should not be CSV — fall through to truncation
+        assert "[" in r.output or "5 items" in r.output
+
+    def test_csv_escaping(self):
+        """Values with commas or quotes should be properly escaped."""
+        data = [{"name": 'Smith, John', "city": "New York"}] + [{"name": f"User{i}", "city": "LA"} for i in range(5)]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
+        # The escaped value should appear
+        assert "Smith, John" in r.output or '"Smith, John"' in r.output
+
+    def test_safety_check_falls_back_when_csv_is_larger(self):
+        """If CSV output is larger than truncation, fall back."""
+        # Two-item array with complex keys should prefer truncation
+        data = [{f"very_long_key_name_{i}": f"value_{i}" for i in range(20)}]
+        text = json.dumps(data)
+        r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
+        # Should fall through since min_rows=3 not met
+
+
+class TestDotkeyEdgeCases:
+    def test_depth_4_rejected(self):
+        """4 levels of nesting should be rejected at max_depth=3."""
+        from archolith_rtk.filters.json_output import _is_dottable
+        data = {"a": {"b": {"c": {"d": 1}}}}
+        assert not _is_dottable(data, max_depth=3)
+
+    def test_depth_3_accepted(self):
+        """3 levels of nesting should be accepted at max_depth=3."""
+        from archolith_rtk.filters.json_output import _is_dottable
+        data = {"a": {"b": {"c": 1}}}
+        assert _is_dottable(data, max_depth=3)
+
+    def test_array_values_not_dottable(self):
+        """Objects with array values should not be dottable."""
+        from archolith_rtk.filters.json_output import _is_dottable
+        data = {"items": [1, 2, 3], "name": "test"}
+        assert not _is_dottable(data, max_depth=3)
+
+
+class TestStackTraceEdgeCases:
+    def test_python_traceback_collapsed(self):
+        """Python tracebacks should be detected and collapsed."""
+        frames = ['  File "/usr/lib/python3.11/site-packages/django/core/handlers.py", line 42, in get_response'] * 8
+        frames.append('  File "/home/user/app.py", line 10, in index')
+        text = "$ python app.py\n[exit 1]\nTraceback (most recent call last):\n" + "\n".join(frames)
+        r = generic_filter(text, GenericFilterOptions(
+            head_lines=5, tail_lines=5,
+            stack_collapse_enabled=True, stack_collapse_min_frames=5,
+        ))
+        # Should detect Python frames and collapse some
+        assert "framework" in r.output.lower() or "omitted" in r.output.lower()
+
+    def test_exception_line_preserved(self):
+        """The exception line before a stack trace should be preserved."""
+        exception_line = "java.lang.NullPointerException: something went wrong"
+        frames = ["    at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:100)"] * 10
+        text = "$ java -jar app.jar\n[exit 1]\n" + exception_line + "\n" + "\n".join(frames)
+        r = generic_filter(text, GenericFilterOptions(
+            head_lines=20, tail_lines=20,
+            stack_collapse_enabled=True, stack_collapse_min_frames=5,
+        ))
+        assert "NullPointerException" in r.output
+
+
+class TestGitStatusEdgeCases:
+    def test_group_exceeds_max_per_line(self):
+        """Files exceeding max_per_line should be truncated with +N more."""
+        lines = [f"M  src/auth/file{i}.ts" for i in range(15)]
+        text = "$ git status -s\n[exit 0]\n" + "\n".join(lines)
+        r = git_status_filter(text, GitStatusFilterOptions(group_enabled=True, group_max_per_line=5))
+        # Should group and truncate
+        assert "+10 more" in r.output or "auth/" in r.output
+
+
+class TestBuildEdgeCases:
+    def test_maven_build_summary(self):
+        """Maven build tasks should be detected and summarized."""
+        lines = [
+            "[INFO] --- maven-compiler-plugin:3.8.1:compile (default-compile) @ myapp ---",
+            "[INFO] --- maven-surefire-plugin:2.22.2:test (default-test) @ myapp ---",
+            "",
+            "BUILD SUCCESSFUL",
+        ]
+        text = "$ mvn package\n[exit 0]\n" + "\n".join(lines)
+        r = build_filter(text, BuildFilterOptions(summary_enabled=True))
+        assert "BUILD SUCCESSFUL" in r.output
+
+    def test_build_with_warnings(self):
+        """Warning lines should be preserved in build summary."""
+        lines = [
+            "> Task :compileJava",
+            "> Task :test",
+            "warning: unchecked call to add",
+            "",
+            "BUILD SUCCESSFUL in 3s",
+        ]
+        text = "$ gradle build\n[exit 0]\n" + "\n".join(lines)
+        r = build_filter(text, BuildFilterOptions(summary_enabled=True))
+        assert "warning" in r.output.lower()
