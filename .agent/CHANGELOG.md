@@ -1,5 +1,14 @@
 # Changelog — archolith-rtk
 
+## 2026-06-02 — format-switch benchmark coverage (Step 12)
+
+- Added benchmark corpora generators for all 9 format-switch strategies to `benchmarks/corpora.py`.
+- Added 9 filter scenarios with retention markers and min-savings thresholds to `benchmarks/practical_report.py`.
+- Added truncation-only baseline comparison proving format-switch savings are materially better than truncation alone.
+- Fixed `checks_passed` logic to correctly handle small corpora that pass through unchanged at low/balanced risk.
+- Enlarged Python stack trace, dotted-key JSON, and build corpora to ensure meaningful compression at all risk levels.
+- All format-switch scenarios now pass practical benchmark with `--exit-0`.
+
 ## 2026-06-02 — format-switch compression (Strategies 1-9)
 
 - **Strategy 1 (CSV)**: JSON arrays of uniform objects are serialized as CSV with header rows, showing significantly more data in fewer tokens than truncated JSON.

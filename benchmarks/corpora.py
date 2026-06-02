@@ -287,7 +287,12 @@ def get_kv_flat_object_text() -> str:
 
 
 def get_nested_json_dotted_text() -> str:
-    """Strategy 3: Nested JSON object → dotted-key lines."""
+    """Strategy 3: Nested JSON object → dotted-key lines.
+
+    Large enough to trigger truncation even at low risk (15 key limit).
+    The object has many fields so the dotted-key format produces
+    meaningful savings over truncated JSON.
+    """
     import json
 
     obj = {
@@ -301,6 +306,9 @@ def get_nested_json_dotted_text() -> str:
                     "csv_enabled": True,
                     "kv_enabled": True,
                     "stack_collapse": True,
+                    "build_summary": True,
+                    "search_heading": True,
+                    "ls_abbreviate": True,
                 },
             },
         },
@@ -318,6 +326,7 @@ def get_nested_json_dotted_text() -> str:
             "errors_total": 42,
             "latency_p50_ms": 120,
             "latency_p99_ms": 850,
+            "uptime_seconds": 86_400,
         },
         "endpoints": [
             {"path": "/api/v1/cards", "method": "GET", "timeout_ms": 5000},
@@ -349,6 +358,28 @@ def get_nested_json_dotted_text() -> str:
             "connection_timeout_ms": 5000,
             "ssl": True,
             "ssl_cert_path": "/etc/ssl/certs/db-ca.pem",
+        },
+        "routes": {
+            "get_cards": {"enabled": True, "rate_limit": 100, "cache_ttl": 300},
+            "get_prices": {"enabled": True, "rate_limit": 100, "cache_ttl": 300},
+            "get_sets": {"enabled": True, "rate_limit": 100, "cache_ttl": 300},
+            "post_sync": {"enabled": True, "rate_limit": 10, "cache_ttl": 0},
+            "get_health": {"enabled": True, "rate_limit": 1000, "cache_ttl": 10},
+        },
+        "logging": {
+            "level": "info",
+            "format": "json",
+            "output": "stdout",
+            "max_file_size_mb": 100,
+            "max_files": 5,
+            "compress_rotated": True,
+        },
+        "security": {
+            "cors_origins": ["https://yawn.rip", "https://yawn.market"],
+            "csrf_enabled": True,
+            "rate_limiting": True,
+            "jwt_expiry_seconds": 3600,
+            "refresh_expiry_seconds": 86400,
         },
     }
     return json.dumps(obj, indent=2)
@@ -450,7 +481,6 @@ def get_stack_trace_java_text() -> str:
         "2026-06-02 10:15:33 INFO  [CardService] Retrying with fallback data source"
     )
     return "\n".join(lines)
-    return "\n".join(lines)
 
 
 def get_stack_trace_python_text() -> str:
@@ -496,13 +526,13 @@ def get_stack_trace_python_text() -> str:
         '  File "/usr/lib/python3.11/logging/__init__.py", line 1460, in getMessage',
         "    msg = str(msg)",
         "ValueError: Unterminated string in logging formatter",
-        "",
-        "Additional debug output from the Python application showing",
-        "various internal state information, connection pool status,",
-        "and configuration parameters that were active at the time",
-        "of the crash. This padding makes the corpus large enough",
-        "to trigger meaningful compression at all risk levels.",
     ]
+    # Add enough padding to exceed low-risk head+tail (30+45=75 lines)
+    for i in range(40):
+        lines.append(
+            f"2026-06-02 10:15:{33 + i % 60:02d} INFO  [Worker-{i % 4}] "
+            f"Processing batch {i} with {i * 10} items in queue"
+        )
     return "\n".join(lines)
 
 

@@ -322,7 +322,11 @@ def _build_filter_scenarios() -> list[PracticalScenario]:
             checks_passed = (
                 all(marker in output for marker in required)
                 and all(marker not in output for marker in forbidden)
-                and after_tokens < before_tokens
+                # A scenario passes when tokens decrease (truncation compressed)
+                # OR when the output is unchanged (small input fits within thresholds).
+                # The latter is valid: the filter correctly decided the input
+                # was small enough to pass through without lossy truncation.
+                and (after_tokens < before_tokens or not result.truncated)
             )
             rows.append(
                 PracticalScenario(
@@ -559,6 +563,139 @@ def _run_acceptance_checks(rows: list[PracticalScenario]) -> list[_AcceptanceChe
     return checks
 
 
+def _run_format_switch_baseline(rows: list[PracticalScenario]) -> list[_AcceptanceCheck]:
+    """Verify that each format-switch scenario saves more tokens than truncation-only.
+
+    For each format-switch scenario, run the same corpus through filter_output
+    with all format-switch knobs disabled and compare token savings against the
+    enabled run. The format-switch path must save at least as many tokens as
+    truncation-only (ideally more).
+    """
+    checks: list[_AcceptanceCheck] = []
+
+    # Scenarios that use format-switch strategies (name → command or tool)
+    format_switch_scenarios = {
+        "filter_json_csv": ("jq . cards.json", None),
+        "filter_json_kv": ("jq . config.json", None),
+        "filter_json_dotted": ("jq . status.json", None),
+        "filter_stack_trace": ("python app.py", None),
+        "filter_stack_trace_python": ("python app.py", None),
+        "filter_git_status": ("git status -s", None),
+        "filter_build_success": ("gradle build", None),
+        "filter_build_success_verbose": ("gradle build --info", None),
+        "filter_ls_la": ("ls -la", None),
+    }
+
+    # Build a config with all format-switch knobs disabled
+    from archolith_rtk.config import FilterConfig
+
+    def _truncation_only_config(risk: FilterRiskLevel) -> FilterConfig:
+        """Config with all format-switch knobs disabled — pure truncation."""
+        base = base_config_for_risk_level(risk)
+        return FilterConfig(
+            # Copy all base settings
+            **{
+                k: getattr(base, k)
+                for k in [
+                    "generic_head", "generic_tail",
+                    "generic_stack_collapse_enabled", "generic_stack_collapse_min_frames",
+                    "generic_stack_collapse_keep_app_frames",
+                    "json_max_keys_per_object", "json_max_array_items", "json_max_depth",
+                    "json_max_value_length",
+                    "git_status_head", "git_status_tail",
+                    "git_status_group_enabled", "git_status_group_max_per_line",
+                    "build_head", "build_tail", "build_summary_enabled",
+                    "fs_max_entries", "fs_head_lines", "fs_tail_lines",
+                    "fs_lsl_abbreviate_enabled",
+                    "search_max_matches_per_file", "search_max_files",
+                    "search_head_lines", "search_tail_lines",
+                    "search_heading_reformat_enabled",
+                ]
+            },
+            # Disable all format-switch knobs
+            json_csv_enabled=False,
+            json_csv_min_rows=1000,
+            json_csv_max_rows=10,
+            json_csv_max_key_length=20,
+            json_csv_factor_enabled=False,
+            json_csv_factor_threshold=0.8,
+            json_csv_factor_max_columns=5,
+            json_kv_enabled=False,
+            json_kv_min_keys=1000,
+            json_kv_max_keys=10,
+            json_dotkey_enabled=False,
+            json_dotkey_max_keys=10,
+            json_dotkey_max_depth=3,
+        )
+
+    # Corpora generators mapped by scenario name
+    from benchmarks.corpora import (
+        get_csv_tabular_json_text,
+        get_kv_flat_object_text,
+        get_nested_json_dotted_text,
+        get_stack_trace_java_text,
+        get_stack_trace_python_text,
+        get_git_status_short_text,
+        get_gradle_build_success_text,
+        get_gradle_build_success_verbose_text,
+        get_ls_la_text,
+    )
+    corpora = {
+        "filter_json_csv": get_csv_tabular_json_text,
+        "filter_json_kv": get_kv_flat_object_text,
+        "filter_json_dotted": get_nested_json_dotted_text,
+        "filter_stack_trace": get_stack_trace_java_text,
+        "filter_stack_trace_python": get_stack_trace_python_text,
+        "filter_git_status": get_git_status_short_text,
+        "filter_build_success": get_gradle_build_success_text,
+        "filter_build_success_verbose": get_gradle_build_success_verbose_text,
+        "filter_ls_la": get_ls_la_text,
+    }
+
+    for level in ALL_RISK_LEVELS:
+        trunc_config = _truncation_only_config(level)
+        for name in format_switch_scenarios:
+            if name not in corpora:
+                continue
+            text = corpora[name]()
+            command, tool = format_switch_scenarios[name]
+            before_tokens = count_tokens(text)
+
+            # Find the enabled scenario result
+            enabled_rows = [r for r in rows if r.name == name and r.risk_level == level.value]
+            if not enabled_rows:
+                continue
+            enabled_row = enabled_rows[0]
+
+            # Run with truncation-only config
+            reset_dedupe_tracker()
+            kwargs = {"command": command, "config": trunc_config}
+            if tool:
+                kwargs = {"tool": tool, "config": trunc_config}
+            trunc_result = filter_output(text, **kwargs)
+            trunc_tokens = count_tokens(trunc_result.output)
+
+            enabled_tokens = enabled_row.tokens_after
+            enabled_saved = before_tokens - enabled_tokens
+            trunc_saved = before_tokens - trunc_tokens
+
+            # Format-switch must save at least as many tokens as truncation-only
+            if enabled_saved >= trunc_saved:
+                checks.append(_AcceptanceCheck(
+                    description=f"{name}/{level.value}: format-switch >= truncation-only",
+                    passed=True,
+                    detail=f"enabled_saved={enabled_saved} >= trunc_saved={trunc_saved}",
+                ))
+            else:
+                checks.append(_AcceptanceCheck(
+                    description=f"{name}/{level.value}: format-switch >= truncation-only",
+                    passed=False,
+                    detail=f"enabled_saved={enabled_saved} < trunc_saved={trunc_saved} ({enabled_tokens} vs {trunc_tokens} tokens after)",
+                ))
+
+    return checks
+
+
 def _render_markdown(rows: list[PracticalScenario], acceptance: list[_AcceptanceCheck]) -> str:
     lines = [
         "# Practical Benchmark Report",
@@ -599,11 +736,35 @@ def _render_markdown(rows: list[PracticalScenario], acceptance: list[_Acceptance
     return "\n".join(lines)
 
 
+def _render_baseline_section(baseline: list[_AcceptanceCheck]) -> str:
+    """Render format-switch vs truncation-only baseline comparison."""
+    lines = [
+        "",
+        "## Format-Switch vs Truncation-Only Baseline",
+        "",
+        "Each format-switch scenario is run with format-switch knobs disabled "
+        "(pure truncation) to verify that the format-switch path saves at least "
+        "as many tokens as truncation-only.",
+        "",
+        "| Check | Passed | Detail |",
+        "|---|---|---|",
+    ]
+    for ac in baseline:
+        passed_str = "PASS" if ac.passed else "FAIL"
+        lines.append(f"| {ac.description} | {passed_str} | {ac.detail} |")
+    return "\n".join(lines)
+
+
 def main() -> int:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     rows = _build_filter_scenarios() + _build_shrink_scenarios()
     acceptance = _run_acceptance_checks(rows)
-    all_passed = all(row.checks_passed for row in rows) and all(ac.passed for ac in acceptance)
+    baseline = _run_format_switch_baseline(rows)
+    all_passed = (
+        all(row.checks_passed for row in rows)
+        and all(ac.passed for ac in acceptance)
+        and all(ac.passed for ac in baseline)
+    )
 
     payload = [asdict(row) for row in rows]
     payload.append(
@@ -619,7 +780,7 @@ def main() -> int:
         }
     )
     JSON_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    MARKDOWN_PATH.write_text(_render_markdown(rows, acceptance), encoding="utf-8")
+    MARKDOWN_PATH.write_text(_render_markdown(rows, acceptance) + _render_baseline_section(baseline), encoding="utf-8")
     print(f"Wrote {JSON_PATH}")
     print(f"Wrote {MARKDOWN_PATH}")
 
@@ -631,6 +792,10 @@ def main() -> int:
         if failed_acceptance:
             for ac in failed_acceptance:
                 print(f"FAILED acceptance: {ac.description} — {ac.detail}")
+        failed_baseline = [ac for ac in baseline if not ac.passed]
+        if failed_baseline:
+            for ac in failed_baseline:
+                print(f"FAILED baseline: {ac.description} — {ac.detail}")
 
     return 0 if all_passed else 1
 

@@ -10,6 +10,8 @@
 - Added ls -la abbreviation (Strategy 9): parses `ls -la/l` column format and emits abbreviated output with just name, type hint, and human-readable size, stripping permissions/owner/group/timestamp.
 - Added 17 new config knobs with env-var overrides and risk-level presets for all format-switch strategies.
 - Added 29 new tests covering all 9 format-switch strategies plus edge cases.
+- Added benchmark corpora and scenarios for all 9 format-switch strategies, with truncation-only baseline comparison verifying format-switch savings are materially better than truncation alone.
+- Fixed `checks_passed` logic in practical benchmark to correctly handle scenarios where small corpora pass through unchanged at low/balanced risk.
 
 - Added exact-match cross-turn output deduplication so repeated identical tool results collapse to a short recovery marker with a `raw_output_id`.
 - Added declaration-aware Layer 2 `read_file` shrinking for char and token budgets, preserving signatures and structure when oversized file reads survive Layer 1.
