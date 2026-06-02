@@ -135,12 +135,15 @@ def _collapse_stack_frames(
     if not runs:
         return body_lines
 
-    # Process runs in reverse order so indices stay valid
+# Process runs in reverse order so indices stay valid
     result_lines = list(body_lines)
     for start_idx, end_idx, lang in reversed(runs):
         frame_lines = result_lines[start_idx:end_idx]
 
-# Classify each frame
+        # Exception line (before the stack trace) is already in result_lines
+        # at start_idx - 1, outside the replacement range — it's naturally preserved.
+
+        # Classify each frame
         classified: list[tuple[str, str]] = []  # (type, line)
         for line in frame_lines:
             # Extract package path for classification

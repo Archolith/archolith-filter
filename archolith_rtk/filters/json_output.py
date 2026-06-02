@@ -135,7 +135,11 @@ def _serialize_csv(
             headers.append(key)
 
     # Strategy 4: Column factoring — find dominant values
+    # A factored column is removed from the table entirely if ALL rows
+    # match the default. If any row has a non-default value, the column
+    # stays in the table but rows matching the default have empty cells.
     factored: dict[str, str] = {}
+    factored_all_default: dict[str, bool] = {}  # True if every row matches default
     if opts.csv_factor_enabled:
         for key in seen_keys:
             values = [_value_to_csv_str(item.get(key)) for item in data if key in item]
@@ -145,9 +149,13 @@ def _serialize_csv(
             dominant_value, dominant_count = counter.most_common(1)[0]
             if dominant_count / len(data) >= opts.csv_factor_threshold and len(factored) < opts.csv_factor_max_columns:
                 factored[key] = dominant_value
+                # Check if ALL rows have the default value
+                all_default = all(_value_to_csv_str(item.get(key)) == dominant_value for item in data)
+                factored_all_default[key] = all_default
 
-    # Build header row — exclude factored columns
-    display_keys = [k for k in seen_keys if k not in factored]
+    # Build header row — exclude factored columns that have 100% default
+    # Include factored columns where some rows have non-default values
+    display_keys = [k for k in seen_keys if k not in factored or not factored_all_default.get(k, False)]
     display_headers = [headers[seen_keys.index(k)] for k in display_keys]
 
     # Build rows
@@ -156,7 +164,12 @@ def _serialize_csv(
         row: list[str] = []
         for key in display_keys:
             if key in item:
-                row.append(_csv_escape(_value_to_csv_str(item[key])))
+                val = _value_to_csv_str(item[key])
+                if key in factored and val == factored[key]:
+                    # Row matches the factored default → empty cell
+                    row.append("")
+                else:
+                    row.append(_csv_escape(_value_to_csv_str(item[key])))
             else:
                 row.append("")  # missing key → empty field
         rows.append(row)
@@ -264,8 +277,11 @@ def _collect_leaves(
 
     Returns None if the structure is not dottable (too deep, or
     contains lists as values).
+
+    Depth is measured as nesting levels below the root dict.
+    max_depth=3 allows depths 0,1,2 (3 levels of keys).
     """
-    if depth > max_depth:
+    if depth >= max_depth:
         return None
     leaves: list[tuple[str, object]] = []
     for key, value in data.items():
