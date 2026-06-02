@@ -705,7 +705,10 @@ def _run_format_switch_baseline(rows: list[PracticalScenario]) -> list[_Acceptan
                 checks.append(_AcceptanceCheck(
                     description=f"{name}/{level.value}: format-switch >= truncation-only",
                     passed=False,
-                    detail=f"enabled_saved={enabled_saved} < trunc_saved={trunc_saved} ({enabled_tokens} vs {trunc_tokens} tokens after)",
+                    detail=(
+                        f"enabled_saved={enabled_saved} < trunc_saved={trunc_saved}"
+                        f" ({enabled_tokens} vs {trunc_tokens} tokens after)"
+                    ),
                 ))
 
     overall_enabled = 0
