@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from ..normalize import normalize_runtime_noise
 from . import FilterResult
 
 
@@ -13,6 +14,7 @@ class LogFilterOptions:
     head_lines: int = 15
     tail_lines: int = 30
     max_consecutive_dupes: int = 3
+    normalize_noise_enabled: bool = True
 
 
 DEFAULT_OPTS = LogFilterOptions()
@@ -81,6 +83,10 @@ def log_filter(formatted: str, opts: LogFilterOptions | None = None) -> FilterRe
     raw_chars = len(formatted)
     if raw_chars == 0:
         return FilterResult(output="", raw_chars=0, filtered_chars=0, truncated=False)
+
+    # Normalize runtime noise (timestamps, PIDs, etc.) before filtering.
+    if opts.normalize_noise_enabled:
+        formatted = normalize_runtime_noise(formatted)
 
     lines = formatted.split("\n")
     header, body = _extract_job_header(lines)

@@ -387,6 +387,7 @@ def _apply_compact_tool_args(
 
     result: list[dict[str, Any]] = []
     chars_saved = 0
+    any_changed = False
 
     for msg in messages:
         if msg.get("role") != "assistant" or not msg.get("tool_calls"):
@@ -461,8 +462,12 @@ def _apply_compact_tool_args(
 
         if msg_changed:
             result.append({**msg, "tool_calls": new_tool_calls})
+            any_changed = True
         else:
             result.append(msg)
+
+    if not any_changed:
+        return messages, 0
 
     return result, chars_saved
 
@@ -569,5 +574,13 @@ def compress_agent_solo_turn(
         + stats.chars_saved_filter
         + stats.chars_saved_compact
     )
+
+    if (
+        not shrink_enabled
+        and not dedup_enabled
+        and not filter_middle_enabled
+        and stats.chars_saved_compact == 0
+    ):
+        stats.skipped_reason = "no_strategies_enabled"
 
     return AgentSoloResult(messages=result, stats=stats)

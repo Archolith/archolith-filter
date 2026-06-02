@@ -93,6 +93,10 @@ class _AcceptanceCheck:
     detail: str = ""
 
 
+_BASELINE_MATERIAL_DELTA_MIN = 250
+_BASELINE_OVERALL_DELTA_MIN = _BASELINE_MATERIAL_DELTA_MIN * len(ALL_RISK_LEVELS)
+
+
 def _measure_call(func, iterations: int = 15, before_each=None) -> tuple[object, float, float]:
     samples: list[float] = []
     result = None
@@ -564,12 +568,12 @@ def _run_acceptance_checks(rows: list[PracticalScenario]) -> list[_AcceptanceChe
 
 
 def _run_format_switch_baseline(rows: list[PracticalScenario]) -> list[_AcceptanceCheck]:
-    """Verify that each format-switch scenario saves more tokens than truncation-only.
+    """Verify that format-switch scenarios beat a true truncation-only baseline.
 
     For each format-switch scenario, run the same corpus through filter_output
     with all format-switch knobs disabled and compare token savings against the
-    enabled run. The format-switch path must save at least as many tokens as
-    truncation-only (ideally more).
+    enabled run. Each scenario must be no worse than truncation-only, and the
+    aggregate delta at each risk level must be materially better.
     """
     checks: list[_AcceptanceCheck] = []
 
@@ -593,26 +597,26 @@ def _run_format_switch_baseline(rows: list[PracticalScenario]) -> list[_Acceptan
         """Config with all format-switch knobs disabled — pure truncation."""
         base = base_config_for_risk_level(risk)
         return FilterConfig(
-            # Copy all base settings
+            # Copy all non-format-switch settings from the base preset.
             **{
                 k: getattr(base, k)
                 for k in [
                     "generic_head", "generic_tail",
-                    "generic_stack_collapse_enabled", "generic_stack_collapse_min_frames",
+                    "generic_stack_collapse_min_frames",
                     "generic_stack_collapse_keep_app_frames",
                     "json_max_keys_per_object", "json_max_array_items", "json_max_depth",
                     "json_max_value_length",
                     "git_status_head", "git_status_tail",
-                    "git_status_group_enabled", "git_status_group_max_per_line",
-                    "build_head", "build_tail", "build_summary_enabled",
+                    "git_status_group_max_per_line",
+                    "build_head", "build_tail",
                     "fs_max_entries", "fs_head_lines", "fs_tail_lines",
-                    "fs_lsl_abbreviate_enabled",
                     "search_max_matches_per_file", "search_max_files",
                     "search_head_lines", "search_tail_lines",
                     "search_heading_reformat_enabled",
                 ]
             },
-            # Disable all format-switch knobs
+            # Disable all format-switch knobs for a real truncation-only baseline.
+            generic_stack_collapse_enabled=False,
             json_csv_enabled=False,
             json_csv_min_rows=1000,
             json_csv_max_rows=10,
@@ -626,6 +630,9 @@ def _run_format_switch_baseline(rows: list[PracticalScenario]) -> list[_Acceptan
             json_dotkey_enabled=False,
             json_dotkey_max_keys=10,
             json_dotkey_max_depth=3,
+            git_status_group_enabled=False,
+            build_summary_enabled=False,
+            fs_lsl_abbreviate_enabled=False,
         )
 
     # Corpora generators mapped by scenario name
@@ -651,6 +658,10 @@ def _run_format_switch_baseline(rows: list[PracticalScenario]) -> list[_Acceptan
         "filter_build_success_verbose": get_gradle_build_success_verbose_text,
         "filter_ls_la": get_ls_la_text,
     }
+
+    aggregate_enabled: dict[str, int] = {level.value: 0 for level in ALL_RISK_LEVELS}
+    aggregate_trunc: dict[str, int] = {level.value: 0 for level in ALL_RISK_LEVELS}
+    strict_wins: dict[str, int] = {level.value: 0 for level in ALL_RISK_LEVELS}
 
     for level in ALL_RISK_LEVELS:
         trunc_config = _truncation_only_config(level)
@@ -678,9 +689,13 @@ def _run_format_switch_baseline(rows: list[PracticalScenario]) -> list[_Acceptan
             enabled_tokens = enabled_row.tokens_after
             enabled_saved = before_tokens - enabled_tokens
             trunc_saved = before_tokens - trunc_tokens
+            aggregate_enabled[level.value] += enabled_saved
+            aggregate_trunc[level.value] += trunc_saved
 
-            # Format-switch must save at least as many tokens as truncation-only
+            # Per-scenario, format-switch must save at least as many tokens as truncation-only.
             if enabled_saved >= trunc_saved:
+                if enabled_saved > trunc_saved:
+                    strict_wins[level.value] += 1
                 checks.append(_AcceptanceCheck(
                     description=f"{name}/{level.value}: format-switch >= truncation-only",
                     passed=True,
@@ -692,6 +707,40 @@ def _run_format_switch_baseline(rows: list[PracticalScenario]) -> list[_Acceptan
                     passed=False,
                     detail=f"enabled_saved={enabled_saved} < trunc_saved={trunc_saved} ({enabled_tokens} vs {trunc_tokens} tokens after)",
                 ))
+
+    overall_enabled = 0
+    overall_trunc = 0
+    overall_strict_wins = 0
+    for level in ALL_RISK_LEVELS:
+        level_name = level.value
+        enabled_total = aggregate_enabled[level_name]
+        trunc_total = aggregate_trunc[level_name]
+        strict_total = strict_wins[level_name]
+        delta = enabled_total - trunc_total
+        overall_enabled += enabled_total
+        overall_trunc += trunc_total
+        overall_strict_wins += strict_total
+        materially_better = delta >= _BASELINE_MATERIAL_DELTA_MIN and strict_total > 0
+        checks.append(_AcceptanceCheck(
+            description=f"aggregate/{level_name}: materially better than truncation-only",
+            passed=materially_better,
+            detail=(
+                f"enabled_total={enabled_total}, trunc_total={trunc_total}, "
+                f"delta={delta}, strict_wins={strict_total}, "
+                f"required_delta>={_BASELINE_MATERIAL_DELTA_MIN}"
+            ),
+        ))
+
+    overall_delta = overall_enabled - overall_trunc
+    checks.append(_AcceptanceCheck(
+        description="aggregate/all: materially better than truncation-only",
+        passed=overall_delta >= _BASELINE_OVERALL_DELTA_MIN and overall_strict_wins >= len(ALL_RISK_LEVELS),
+        detail=(
+            f"enabled_total={overall_enabled}, trunc_total={overall_trunc}, "
+            f"delta={overall_delta}, strict_wins={overall_strict_wins}, "
+            f"required_delta>={_BASELINE_OVERALL_DELTA_MIN}"
+        ),
+    ))
 
     return checks
 
@@ -743,8 +792,8 @@ def _render_baseline_section(baseline: list[_AcceptanceCheck]) -> str:
         "## Format-Switch vs Truncation-Only Baseline",
         "",
         "Each format-switch scenario is run with format-switch knobs disabled "
-        "(pure truncation) to verify that the format-switch path saves at least "
-        "as many tokens as truncation-only.",
+        "(pure truncation) to verify that the format-switch path is never worse "
+        "per scenario and is materially better in aggregate at each risk level.",
         "",
         "| Check | Passed | Detail |",
         "|---|---|---|",
@@ -776,6 +825,18 @@ def main() -> int:
                     "detail": ac.detail,
                 }
                 for ac in acceptance
+            ]
+        }
+    )
+    payload.append(
+        {
+            "_baseline": [
+                {
+                    "description": ac.description,
+                    "passed": ac.passed,
+                    "detail": ac.detail,
+                }
+                for ac in baseline
             ]
         }
     )

@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from ..normalize import normalize_runtime_noise
 from . import FilterResult
 from .generic import GenericFilterOptions, generic_filter
 
@@ -18,6 +19,7 @@ class BuildFilterOptions:
     head_lines: int = 15
     tail_lines: int = 25
     summary_enabled: bool = True
+    normalize_noise_enabled: bool = True
 
 
 DEFAULT_OPTS = BuildFilterOptions()
@@ -89,6 +91,10 @@ def build_filter(formatted: str, opts: BuildFilterOptions | None = None) -> Filt
     raw_chars = len(formatted)
     if raw_chars == 0:
         return FilterResult(output="", raw_chars=0, filtered_chars=0, truncated=False)
+
+    # Normalize runtime noise (timestamps, PIDs, etc.) before filtering.
+    if opts.normalize_noise_enabled:
+        formatted = normalize_runtime_noise(formatted)
 
     if not opts.summary_enabled:
         return generic_filter(formatted, GenericFilterOptions(head_lines=opts.head_lines, tail_lines=opts.tail_lines))

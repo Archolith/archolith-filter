@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Layer 0 pre-filter pipeline**: wired `redact_secrets()`, `strip_thinking_blocks()`, and `normalize_paths()` into `filter_output()` with per-stage config gating (env vars `ARCHOLITH_RTK_FILTER_*_ENABLED`). Added binary detection (NUL-byte scan, early return), oversized input guard (>500KB head/tail preview, configurable via `ARCHOLITH_RTK_FILTER_OVERSIZED_MAX_CHARS`), runtime noise normalization in log/build/test filters (`normalize_runtime_noise()`), and table whitespace minimization in `fs_listing_filter()`. Each stage individually toggleable. Added 9 new config knobs and risk-level presets. (Closes `archolith-rtk-layer0-hardening-plan.md`)
 - Added format-switch compression for JSON output: CSV for tabular arrays (Strategy 1), column factoring for dominant values (Strategy 4), key-value lines for flat objects (Strategy 2), and dotted-key lines for nested objects (Strategy 3). Each strategy has safety checks that fall back to truncation when the format-switch output isn't shorter.
 - Added stack trace frame collapsing (Strategy 5): detects Java, Python, Node, and Go stack traces in generic output, classifies framework vs application frames, and collapses framework frames into a summary line.
 - Added git status prefix grouping (Strategy 6): groups short-format git status lines by directory and status code, producing more compact output when many files share the same directory.
@@ -12,6 +13,9 @@
 - Added 29 new tests covering all 9 format-switch strategies plus edge cases.
 - Added benchmark corpora and scenarios for all 9 format-switch strategies, with truncation-only baseline comparison verifying format-switch savings are materially better than truncation alone.
 - Fixed `checks_passed` logic in practical benchmark to correctly handle scenarios where small corpora pass through unchanged at low/balanced risk.
+- Fixed the truncation-only benchmark harness to disable all format-switch knobs, including stack-trace collapse, git-status grouping, build summaries, and `ls -la` abbreviation, so the baseline now measures a real truncation-only path.
+- Added aggregate material-improvement gates to the practical benchmark report and JSON output, with the latest run showing `+1175` low-risk, `+1252` balanced, `+1296` high-risk, and `+3723` overall savings versus truncation-only.
+- Fixed no-op `compress_agent_solo_turn()` behavior so unchanged turns preserve message identity and report `no_strategies_enabled`, clearing the previously failing full-suite pytest case.
 
 - Added exact-match cross-turn output deduplication so repeated identical tool results collapse to a short recovery marker with a `raw_output_id`.
 - Added declaration-aware Layer 2 `read_file` shrinking for char and token budgets, preserving signatures and structure when oversized file reads survive Layer 1.

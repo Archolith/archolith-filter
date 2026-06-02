@@ -140,7 +140,9 @@ def normalize_paths(text: str, config: PathConfig | None = None) -> str:
     - Only normalizes paths that match a known root prefix.
     - Off-switch: ``ARCHOLITH_RTK_STRIP_WORKSPACE_ROOT=off`` disables this.
     """
-    # Off-switch check.
+    # Off-switch check (standalone safety valve for direct callers).
+    # When called through the RTK pipeline (filter_output), the primary
+    # gate is ARCHOLITH_RTK_FILTER_NORMALIZE_PATHS_ENABLED in FilterConfig.
     off = os.environ.get("ARCHOLITH_RTK_STRIP_WORKSPACE_ROOT", "")
     if off.lower() in ("off", "false", "0"):
         return text

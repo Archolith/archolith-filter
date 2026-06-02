@@ -113,6 +113,22 @@ class FilterConfig:
     build_summary_enabled: bool = True
     # Strategy 9: ls -la abbreviation
     fs_lsl_abbreviate_enabled: bool = True
+    # ─── Layer 0: Pre-filter pipeline ──────────────────────────────────
+    # Secret redaction (redact.py)
+    redact_enabled: bool = True
+    # Thinking block stripping (strip_thinking.py)
+    strip_thinking_enabled: bool = True
+    # Path normalization (paths.py)
+    normalize_paths_enabled: bool = True
+    # Binary detection (inline in filter_output)
+    binary_detection_enabled: bool = True
+    # Oversized input guard (inline in filter_output, chars)
+    oversized_guard_enabled: bool = True
+    oversized_max_chars: int = 500_000
+    # Runtime noise normalization in log/build/test filters
+    normalize_noise_enabled: bool = True
+    # Table whitespace minimization in fs_listing
+    table_whitespace_min_enabled: bool = True
     # read_file compressor knobs
     read_import_collapse: bool = True
     read_blank_line_max: int = 1
@@ -375,6 +391,47 @@ json_max_keys_per_object=_env_int(
         fs_lsl_abbreviate_enabled=_env_int(
             "ARCHOLITH_RTK_FILTER_FS_LSL_ABBREVIATE_ENABLED",
             1 if base.fs_lsl_abbreviate_enabled else 0,
+            1,
+        ) == 1,
+        # ─── Layer 0 knobs ────────────────────────────────────────────
+        redact_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_REDACT_ENABLED",
+            1 if base.redact_enabled else 0,
+            1,
+        ) == 1,
+        strip_thinking_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_STRIP_THINKING_ENABLED",
+            1 if base.strip_thinking_enabled else 0,
+            1,
+        ) == 1,
+        normalize_paths_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_NORMALIZE_PATHS_ENABLED",
+            1 if base.normalize_paths_enabled else 0,
+            1,
+        ) == 1,
+        binary_detection_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_BINARY_DETECTION_ENABLED",
+            1 if base.binary_detection_enabled else 0,
+            1,
+        ) == 1,
+        oversized_guard_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_OVERSIZED_GUARD_ENABLED",
+            1 if base.oversized_guard_enabled else 0,
+            1,
+        ) == 1,
+        oversized_max_chars=_env_int(
+            "ARCHOLITH_RTK_FILTER_OVERSIZED_MAX_CHARS",
+            base.oversized_max_chars,
+            10_000_000,
+        ),
+        normalize_noise_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_NORMALIZE_NOISE_ENABLED",
+            1 if base.normalize_noise_enabled else 0,
+            1,
+        ) == 1,
+        table_whitespace_min_enabled=_env_int(
+            "ARCHOLITH_RTK_FILTER_TABLE_WHITESPACE_MIN_ENABLED",
+            1 if base.table_whitespace_min_enabled else 0,
             1,
         ) == 1,
         read_import_collapse=_env_int(

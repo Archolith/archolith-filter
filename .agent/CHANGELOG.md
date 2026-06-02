@@ -8,6 +8,9 @@
 - Fixed `checks_passed` logic to correctly handle small corpora that pass through unchanged at low/balanced risk.
 - Enlarged Python stack trace, dotted-key JSON, and build corpora to ensure meaningful compression at all risk levels.
 - All format-switch scenarios now pass practical benchmark with `--exit-0`.
+- Fixed the truncation-only baseline to disable every format-switch knob it was meant to compare against, including stack collapse, git-status grouping, build summaries, and `ls -la` abbreviation.
+- Added aggregate baseline gates so Step 12 now proves material improvement at every preset: `+1175` low, `+1252` balanced, `+1296` high, `+3723` overall versus truncation-only.
+- Fixed no-op `agent_solo` orchestration so unchanged turns preserve identity and still report `no_strategies_enabled`, which restores a clean full pytest run for the plan verification set.
 
 ## 2026-06-02 — format-switch compression (Strategies 1-9)
 

@@ -124,6 +124,68 @@ __all__ = [
 # Minimum result length (chars) to justify filtering overhead.
 _MIN_FILTER_CHARS = 500
 
+# ── Binary detection ──────────────────────────────────────────────────────
+# Scan the first 64 KB for NUL bytes. If >3 NUL bytes, compute text ratio.
+_BINARY_SCAN_BYTES = 64_000
+_BINARY_NUL_THRESHOLD = 3
+_BINARY_TEXT_RATIO = 0.1
+
+
+def _is_binary_output(text: str) -> tuple[bool, int, float]:
+    """Check if *text* appears to be binary content.
+
+    Returns (is_binary, nul_count, text_ratio).
+    """
+    nul_count = 0
+    scan_chars = min(len(text), _BINARY_SCAN_BYTES)
+    for ch in text[:scan_chars]:
+        if ch == '\x00':
+            nul_count += 1
+            if nul_count > _BINARY_NUL_THRESHOLD:
+                break
+
+    if nul_count <= _BINARY_NUL_THRESHOLD:
+        return False, nul_count, 1.0
+
+    # Strip control chars to measure text content (limited to same scan window).
+    scan_text = text[:_BINARY_SCAN_BYTES]
+    cleaned = ''.join(
+        ch for ch in scan_text
+        if ch >= ' ' or ch in '\n\r\t'
+    )
+    text_ratio = len(cleaned.strip()) / max(1, len(scan_text))
+    return text_ratio < _BINARY_TEXT_RATIO, nul_count, text_ratio
+
+
+# ── Oversized input guard ─────────────────────────────────────────────────
+_OVERSIZED_HEAD_CHARS = 2000
+_OVERSIZED_TAIL_CHARS = 1000
+
+
+def _oversized_guard(text: str, max_chars: int) -> FilterResult | None:
+    """Check if *text* exceeds *max_chars* and return a head/tail preview.
+
+    Returns a FilterResult with truncated output if oversized, or None
+    if the text is within limits.
+    """
+    if len(text) <= max_chars:
+        return None
+
+    head = text[:_OVERSIZED_HEAD_CHARS]
+    tail = text[-_OVERSIZED_TAIL_CHARS:]
+    marker = (
+        f"\n[... Output truncated: {len(text):,} chars (limit: {max_chars:,}). "
+        f"Showing first {_OVERSIZED_HEAD_CHARS:,} and last {_OVERSIZED_TAIL_CHARS:,} chars. "
+        f"Use targeted queries or narrower tool scope to see the full output. ...]\n"
+    )
+    output = f"{head}{marker}{tail}"
+    return FilterResult(
+        output=output,
+        raw_chars=len(text),
+        filtered_chars=len(output),
+        truncated=True,
+    )
+
 
 def _category_filter(
     category: CommandCategory | str,
@@ -150,12 +212,14 @@ def _category_filter(
         ))
     if category == "test":
         return filter_test_output(formatted, TestFilterOptions(
-            head_lines=cfg.test_head, tail_lines=cfg.test_tail
+            head_lines=cfg.test_head, tail_lines=cfg.test_tail,
+            normalize_noise_enabled=cfg.normalize_noise_enabled,
         ))
     if category == "build":
         return build_filter(formatted, BuildFilterOptions(
             head_lines=cfg.build_head, tail_lines=cfg.build_tail,
             summary_enabled=cfg.build_summary_enabled,
+            normalize_noise_enabled=cfg.normalize_noise_enabled,
         ))
     if category == "lint":
         return lint_filter(formatted, LintFilterOptions(
@@ -169,6 +233,7 @@ def _category_filter(
         return fs_listing_filter(formatted, FsListingFilterOptions(
             max_entries=cfg.fs_max_entries, head_lines=cfg.fs_head_lines, tail_lines=cfg.fs_tail_lines,
             lsl_abbreviate_enabled=cfg.fs_lsl_abbreviate_enabled,
+            table_whitespace_min_enabled=cfg.table_whitespace_min_enabled,
         ))
     if category == "search":
         return search_filter(formatted, SearchFilterOptions(
@@ -202,6 +267,7 @@ def _category_filter(
         return log_filter(formatted, LogFilterOptions(
             head_lines=cfg.log_head, tail_lines=cfg.log_tail,
             max_consecutive_dupes=cfg.log_max_consecutive_dupes,
+            normalize_noise_enabled=cfg.normalize_noise_enabled,
         ))
     if category == "read_file":
         return read_file_filter(formatted, ReadFileFilterOptions(
@@ -233,6 +299,18 @@ def filter_output(
 ) -> FilterResult:
     """Layer 1: Filter a tool result before it enters model context.
 
+    Pipeline order:
+        1. Secret redaction — strip secrets before anything else touches text
+        2. Binary detection — early return for NUL-byte content
+        3. Oversized guard — early return for >configured_max chars
+        4. ANSI stripping — strip terminal control codes
+        5. Thinking block strip — remove model-internal reasoning tags
+        6. Path normalization — strip workspace root, normalize separators
+        7. Cross-turn dedupe — exact-match repeat detection
+        8. Error-awareness — non-zero exit bypasses filtering
+        9. 500-char minimum — skip small results
+       10. Category dispatch — route to category-specific filter
+
     Args:
         text: The raw tool output text.
         command: The shell command that produced this output (for classification).
@@ -250,39 +328,108 @@ def filter_output(
     if not is_filter_enabled():
         return FilterResult(output=text, raw_chars=len(text), filtered_chars=len(text), truncated=False)
 
-    # Strip ANSI escape codes — the model doesn't need color/styling.
-    stripped = strip_ansi(text)
+    raw_chars = len(text)
 
-    # Cross-turn dedupe: check if we've seen this exact content before.
+    # ── Layer 0: Pre-filter pipeline ────────────────────────────────
+    # Stage 1: Secret redaction — FIRST, before anything else.
+    redacted = text
+    redaction_count = 0
+    if config.redact_enabled:
+        redacted_result = redact_secrets(text)
+        redacted = redacted_result.output
+        redaction_count = redacted_result.redaction_count
+        if redaction_count > 0:
+            record_filter_telemetry(
+                command=command or tool,
+                tool=tool or None,
+                filter_kind="redact",
+                raw_chars=raw_chars,
+                filtered_chars=len(redacted),
+                raw_output_id=None,
+                fallback_used=False,
+            )
+
+    # Stage 2: Binary detection — early return if content is binary.
+    if config.binary_detection_enabled:
+        is_binary, nul_count, text_ratio = _is_binary_output(redacted)
+        if is_binary:
+            output = (
+                f"[Binary output suppressed — {nul_count} NUL bytes, "
+                f"{text_ratio:.1%} text content.]"
+            )
+            record_filter_telemetry(
+                command=command or tool,
+                tool=tool or None,
+                filter_kind="binary",
+                raw_chars=raw_chars,
+                filtered_chars=len(output),
+                raw_output_id=None,
+                fallback_used=False,
+            )
+            return FilterResult(
+                output=output,
+                raw_chars=raw_chars,
+                filtered_chars=len(output),
+                truncated=True,
+            )
+
+    # Stage 3: Oversized input guard — early return for huge outputs.
+    if config.oversized_guard_enabled:
+        oversized_result = _oversized_guard(redacted, config.oversized_max_chars)
+        if oversized_result is not None:
+            record_filter_telemetry(
+                command=command or tool,
+                tool=tool or None,
+                filter_kind="oversized",
+                raw_chars=raw_chars,
+                filtered_chars=oversized_result.filtered_chars,
+                raw_output_id=None,
+                fallback_used=False,
+            )
+            return oversized_result
+
+    # ── Core pipeline ─────────────────────────────────────────────────
+    # Stage 4: Strip ANSI escape codes.
+    stripped = strip_ansi(redacted)
+
+    # Stage 5: Thinking block strip — remove model reasoning tags.
+    if config.strip_thinking_enabled:
+        stripped = strip_thinking_blocks(stripped)
+
+    # Stage 6: Path normalization — strip workspace root, normalize separators.
+    if config.normalize_paths_enabled:
+        stripped = normalize_paths(stripped)
+
+    # Stage 7: Cross-turn dedupe — check for exact repeats.
     dedupe = get_dedupe_tracker()
     dedupe_hit = dedupe.check(stripped)
     if dedupe_hit is not None:
         occurrence = dedupe.record(stripped)
         store = get_raw_output_store()
-        raw_id = store.store(text, command=command or tool, tool=tool, filtered_chars=0)
+        raw_id = store.store(redacted, command=command or tool, tool=tool, filtered_chars=0)
         marker = f"[repeated output, occurrence {occurrence}, raw_output_id={raw_id}]"
         record_filter_telemetry(
             command=command or tool,
             tool=tool or None,
             filter_kind="dedupe",
-            raw_chars=len(text),
+            raw_chars=raw_chars,
             filtered_chars=len(marker),
             raw_output_id=raw_id,
             fallback_used=False,
         )
-        return FilterResult(output=marker, raw_chars=len(text), filtered_chars=len(marker), truncated=True)
+        return FilterResult(output=marker, raw_chars=raw_chars, filtered_chars=len(marker), truncated=True)
     dedupe.record(stripped)
 
-    # Error-aware: never filter failed commands.
+    # Stage 8: Error-aware — never filter failed commands.
     if timed_out or (exit_code is not None and exit_code != 0):
-        return FilterResult(output=stripped, raw_chars=len(text), filtered_chars=len(stripped), truncated=False)
+        return FilterResult(output=stripped, raw_chars=raw_chars, filtered_chars=len(stripped), truncated=False)
 
-    # Skip small results — overhead outweighs savings.
+    # Stage 9: Skip small results — overhead outweighs savings.
     if len(stripped) < _MIN_FILTER_CHARS:
-        return FilterResult(output=stripped, raw_chars=len(text), filtered_chars=len(stripped), truncated=False)
+        return FilterResult(output=stripped, raw_chars=raw_chars, filtered_chars=len(stripped), truncated=False)
 
     try:
-        # Verbose commands get doubled head/tail limits.
+        # Stage 10: Verbose commands get doubled head/tail limits.
         effective_cfg = boost_for_verbose(config) if is_verbose_command(command) else config
 
         # Classify the command to route to the right filter.
@@ -298,7 +445,7 @@ def filter_output(
         if category in {"passthrough", "shell"}:
             return FilterResult(
                 output=stripped,
-                raw_chars=len(text),
+                raw_chars=raw_chars,
                 filtered_chars=len(stripped),
                 truncated=False,
             )
@@ -308,7 +455,7 @@ def filter_output(
         # Store raw output and add recovery marker when output was compressed.
         if result.truncated:
             store = get_raw_output_store()
-            raw_id = store.store(text, command=command or tool, tool=tool, filtered_chars=result.filtered_chars)
+            raw_id = store.store(redacted, command=command or tool, tool=tool, filtered_chars=result.filtered_chars)
             record_filter_telemetry(
                 command=command or tool,
                 tool=tool or None,
@@ -335,19 +482,19 @@ def filter_output(
         return result
 
     except Exception:
-        # Fail open: any error returns the ANSI-stripped string.
+        # Fail open: any error returns the stripped string.
         store = get_raw_output_store()
-        raw_id = store.store(text, command=command or tool, tool=tool, filtered_chars=len(stripped))
+        raw_id = store.store(redacted, command=command or tool, tool=tool, filtered_chars=len(stripped))
         record_filter_telemetry(
             command=command or tool,
             tool=tool or None,
             filter_kind="fallback",
-            raw_chars=len(stripped),
+            raw_chars=raw_chars,
             filtered_chars=len(stripped),
             raw_output_id=raw_id,
             fallback_used=True,
         )
-        return FilterResult(output=stripped, raw_chars=len(text), filtered_chars=len(stripped), truncated=False)
+        return FilterResult(output=stripped, raw_chars=raw_chars, filtered_chars=len(stripped), truncated=False)
 
 
 # Tool name classification for non-shell dispatch.
