@@ -30,9 +30,18 @@ Tool output text
        │
        ▼
   filter_output()                    ← Layer 1
-  ├── strip_ansi()
+  ├── redact_secrets()               ← Layer 0: secret redaction
+  ├── _is_binary_output()            ← Layer 0: binary detection (early return)
+  ├── _oversized_guard()             ← Layer 0: oversized guard (early return)
+  ├── strip_ansi()                   ← Layer 0: ANSI stripping
+  ├── strip_thinking_blocks()        ← Layer 0: thinking block strip
+  ├── normalize_paths()              ← Layer 0: path normalization
   ├── classify_command()             → CommandCategory
   ├── _category_filter()             → category-specific FilterResult
+  │   ├── log_filter()               → normalize_runtime_noise() first
+  │   ├── build_filter()             → normalize_runtime_noise() first
+  │   ├── filter_test_output()       → normalize_runtime_noise() first
+  │   └── fs_listing_filter()        → _minimize_table_whitespace() first
   ├── raw_store.store()              → recovery ID appended to output
   └── record_filter_telemetry()
        │
@@ -215,6 +224,14 @@ All env vars use the prefix `ARCHOLITH_RTK_FILTER_`:
 | `ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_LINE_LEN` | Long-line threshold for generated/minified block collapse | 500 |
 | `ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_RUN` | Consecutive long lines required before collapsing generated/minified blocks | 5 |
 | `ARCHOLITH_RTK_FILTER_READ_LITERAL_THRESHOLD` | Collapse threshold for multiline strings and large literal blocks | 8 |
+| `ARCHOLITH_RTK_FILTER_REDACT_ENABLED` | Enable secret redaction | 1 |
+| `ARCHOLITH_RTK_FILTER_STRIP_THINKING_ENABLED` | Enable thinking block stripping | 1 |
+| `ARCHOLITH_RTK_FILTER_NORMALIZE_PATHS_ENABLED` | Enable path normalization | 1 |
+| `ARCHOLITH_RTK_FILTER_BINARY_DETECTION_ENABLED` | Enable binary output detection | 1 |
+| `ARCHOLITH_RTK_FILTER_OVERSIZED_GUARD_ENABLED` | Enable oversized input guard | 1 |
+| `ARCHOLITH_RTK_FILTER_OVERSIZED_MAX_CHARS` | Threshold for oversized guard (chars) | 500000 |
+| `ARCHOLITH_RTK_FILTER_NORMALIZE_NOISE_ENABLED` | Enable runtime noise normalization in log/build/test filters | 1 |
+| `ARCHOLITH_RTK_FILTER_TABLE_WHITESPACE_MIN_ENABLED` | Enable table whitespace minimization | 1 |
 
 All numeric values are clamped to upper bounds (lines: 500, entries: 1000, depth: 10, value length: 10000).
 

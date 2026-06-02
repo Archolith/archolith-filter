@@ -30,6 +30,38 @@ Layer 2: shrink_messages()   Truncate oversized messages in conversation history
 
 Both layers are deterministic and require no LLM calls.
 
+## Layer 0 — Pre-Filter Pipeline
+
+Before category-specific filtering, every tool output passes through a Layer 0
+pre-filter pipeline. Each stage is individually toggleable via
+`ARCHOLITH_RTK_FILTER_*_ENABLED` env vars (all enabled by default):
+
+1. **Secret redaction** — Strips API keys, tokens, credentials, and connection
+   strings using compiled alternation regex. Runs before anything else touches
+   the text. (`redact_enabled`)
+2. **Binary detection** — Scans the first 64KB for NUL bytes. If >3 found and
+   text ratio <10%, returns `[Binary output suppressed]`. (`binary_detection_enabled`)
+3. **Oversized input guard** — If output exceeds the configured max (default
+   500KB), returns first 2000 + last 1000 chars with an omission marker.
+   (`oversized_guard_enabled`, `oversized_max_chars`)
+4. **ANSI stripping** — Terminal control codes stripped. (Always on.)
+5. **Thinking block strip** — Removes model-internal reasoning tags
+   (`<thinking>`, `<antThinking>`, etc.). (`strip_thinking_enabled`)
+6. **Path normalization** — Strips workspace root prefix, normalizes `\` to `/`.
+   (`normalize_paths_enabled`)
+7. **Cross-turn dedupe** — Exact-match repeat detection. (Always on.)
+8. **Error-awareness** — Non-zero exit bypasses all filtering. (Always on.)
+9. **500-char minimum** — Small results pass through unchanged. (Always on.)
+
+Within category-specific filters, **runtime noise normalization** replaces
+timestamps, PIDs, elapsed times, and memory sizes with stable placeholders
+(`[TIMESTAMP]`, `[PID]`, `[X]ms`, `[X]SIZE`) for log, build, and test output.
+(`normalize_noise_enabled`)
+
+In `fs_listing_filter`, **table whitespace minimization** strips padding from
+pipe-delimited tables (e.g., `docker ps`, `kubectl get`).
+(`table_whitespace_min_enabled`)
+
 ## Layer 1 — Output Filters
 
 Compress tool output before it enters the model context. Routes output through
