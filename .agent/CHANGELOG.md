@@ -1,5 +1,12 @@
 # Changelog — archolith-rtk
 
+## 2026-06-02 — Layer 0 pre-filter pipeline wiring
+
+- **Layer 0 pipeline**: Wired `redact_secrets()`, `strip_thinking_blocks()`, and `normalize_paths()` into `filter_output()` with per-stage config gating. Added binary detection (NUL-byte scan, early return at <10% text ratio), oversized input guard (500KB default threshold, head/tail preview), and table whitespace minimization in `fs_listing_filter()`.
+- **Runtime noise normalization**: `normalize_runtime_noise()` now called inside `log_filter()`, `build_filter()`, and `filter_test_output()` to replace timestamps/PIDs/elapsed times with stable placeholders.
+- **9 new config knobs**: `REDACT_ENABLED`, `BINARY_DETECTION_ENABLED`, `OVERSIZED_GUARD_ENABLED`, `OVERSIZED_MAX_CHARS`, `STRIP_THINKING_ENABLED`, `NORMALIZE_PATHS_ENABLED`, `NORMALIZE_NOISE_ENABLED`, `TABLE_WHITESPACE_MIN_ENABLED` — all toggleable via `ARCHOLITH_RTK_FILTER_*` env vars.
+- **Verification gates pass**: `ruff check archolith_rtk` (0 errors in package code), `pytest tests/` (335/335), `benchmarks/practical_report.py` (all scenarios and acceptance checks pass).
+
 ## 2026-06-02 — format-switch benchmark coverage (Step 12)
 
 - Added benchmark corpora generators for all 9 format-switch strategies to `benchmarks/corpora.py`.
