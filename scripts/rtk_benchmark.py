@@ -2,7 +2,7 @@
 """RTK Benchmark: Run filter_output() against real session data.
 
 Extracts tool results from Claude JSONL, Codex JSONL, and OpenCode SQLite,
-runs archolith_rtk.filter_output() on each, and reports actual compression
+runs archolith_filter.filter_output() on each, and reports actual compression
 ratios per tool, per category, and per size range.
 
 Usage:
@@ -19,11 +19,11 @@ import os
 from collections import defaultdict
 from pathlib import Path
 
-# Add parent to path so we can import archolith_rtk
+# Add parent to path so we can import archolith_filter
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from archolith_rtk import filter_output, FilterConfig, FilterResult, from_env
-from archolith_rtk.classifier import CommandCategory
+from archolith_filter import filter_output, FilterConfig, FilterResult, from_env
+from archolith_filter.classifier import CommandCategory
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ def run_benchmark(tool_results, source: str, config: FilterConfig = None, max_re
         config = FilterConfig()
 
     # Reset per-run state
-    from archolith_rtk import reset_dedupe_tracker, reset_raw_output_store, reset_filter_telemetry_store
+    from archolith_filter import reset_dedupe_tracker, reset_raw_output_store, reset_filter_telemetry_store
     reset_dedupe_tracker()
     reset_raw_output_store()
     reset_filter_telemetry_store()
@@ -303,7 +303,7 @@ def run_benchmark(tool_results, source: str, config: FilterConfig = None, max_re
         size_savings[bucket]["count"] += 1
 
     # Get telemetry for category-level breakdown
-    from archolith_rtk import get_filter_telemetry_store
+    from archolith_filter import get_filter_telemetry_store
     telemetry = get_filter_telemetry_store()
     for entry in telemetry.entries:
         cat = entry.filter_kind

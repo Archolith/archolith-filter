@@ -6,7 +6,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from archolith_rtk import (
+from archolith_filter import (
     FilterRiskLevel,
     base_config_for_risk_level,
     count_tokens,
@@ -235,7 +235,7 @@ def _build_filter_scenarios() -> list[PracticalScenario]:
                 config=cfg,
             ),
             count_tokens(get_nested_json_dotted_text()),
-            ["service", "deployment", "archolith-rtk"],
+            ["service", "deployment", "archolith-filter"],
             [],
         ),
         (
@@ -591,7 +591,7 @@ def _run_format_switch_baseline(rows: list[PracticalScenario]) -> list[_Acceptan
     }
 
     # Build a config with all format-switch knobs disabled
-    from archolith_rtk.config import FilterConfig
+    from archolith_filter.config import FilterConfig
 
     def _truncation_only_config(risk: FilterRiskLevel) -> FilterConfig:
         """Config with all format-switch knobs disabled — pure truncation."""

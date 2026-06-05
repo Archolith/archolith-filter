@@ -1,6 +1,6 @@
 """BashRtkExtractor — RTK-enhanced Bash command extractor.
 
-Uses archolith-rtk's ``classify_command()`` as the single source of truth
+Uses archolith-filter's ``classify_command()`` as the single source of truth
 for routing, then applies category-specific regex extraction. No LLM calls
 are made — ``may_use_llm`` is always False. If a category route doesn't
 produce structured facts, a single generic fact is emitted.
@@ -12,13 +12,13 @@ import re
 
 import httpx
 
-from archolith_rtk.classifier import classify_command
-from archolith_rtk.extractors.base import (
+from archolith_filter.classifier import classify_command
+from archolith_filter.extractors.base import (
     PartialExtractionResult,
     RtkExtractorBase,
     ToolCallRecord,
 )
-from archolith_rtk.strip_ansi import strip_ansi
+from archolith_filter.strip_ansi import strip_ansi
 
 # --- Regex patterns for category-specific extraction ---
 

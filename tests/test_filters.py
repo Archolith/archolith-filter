@@ -1,36 +1,36 @@
-"""Tests for archolith_rtk — Phase 1 core filters."""
+"""Tests for archolith_filter — Phase 1 core filters."""
 
 import json
 
 import pytest
 
-from archolith_rtk import filter_output
-from archolith_rtk.classifier import CommandCategory, classify_command
-from archolith_rtk.config import (
+from archolith_filter import filter_output
+from archolith_filter.classifier import CommandCategory, classify_command
+from archolith_filter.config import (
     FilterRiskLevel,
     base_config_for_risk_level,
     from_env,
     is_verbose_command,
 )
-from archolith_rtk.dedupe import reset_dedupe_tracker
-from archolith_rtk.filter_meta import parse_result_meta
-from archolith_rtk.filters.build_output import BuildFilterOptions, build_filter
-from archolith_rtk.filters.fs_listing import FsListingFilterOptions, fs_listing_filter
-from archolith_rtk.filters.generic import GenericFilterOptions, generic_filter
-from archolith_rtk.filters.git_diff import GitDiffFilterOptions, git_diff_filter
-from archolith_rtk.filters.git_log import git_log_filter
-from archolith_rtk.filters.git_show import git_show_filter
-from archolith_rtk.filters.git_status import GitStatusFilterOptions, git_status_filter
-from archolith_rtk.filters.json_output import JsonFilterOptions, json_filter
-from archolith_rtk.filters.lint_output import lint_filter
-from archolith_rtk.filters.logs import LogFilterOptions, log_filter
-from archolith_rtk.filters.read_file import ReadFileFilterOptions, read_file_filter
-from archolith_rtk.filters.search import SearchFilterOptions, search_filter
-from archolith_rtk.filters.test_run_output import filter_test_output
-from archolith_rtk.filters.typecheck_output import typecheck_filter
-from archolith_rtk.raw_store import RawOutputStore, get_raw_output_store, reset_raw_output_store
-from archolith_rtk.strip_ansi import strip_ansi
-from archolith_rtk.telemetry import get_filter_telemetry_store, reset_filter_telemetry_store
+from archolith_filter.dedupe import reset_dedupe_tracker
+from archolith_filter.filter_meta import parse_result_meta
+from archolith_filter.filters.build_output import BuildFilterOptions, build_filter
+from archolith_filter.filters.fs_listing import FsListingFilterOptions, fs_listing_filter
+from archolith_filter.filters.generic import GenericFilterOptions, generic_filter
+from archolith_filter.filters.git_diff import GitDiffFilterOptions, git_diff_filter
+from archolith_filter.filters.git_log import git_log_filter
+from archolith_filter.filters.git_show import git_show_filter
+from archolith_filter.filters.git_status import GitStatusFilterOptions, git_status_filter
+from archolith_filter.filters.json_output import JsonFilterOptions, json_filter
+from archolith_filter.filters.lint_output import lint_filter
+from archolith_filter.filters.logs import LogFilterOptions, log_filter
+from archolith_filter.filters.read_file import ReadFileFilterOptions, read_file_filter
+from archolith_filter.filters.search import SearchFilterOptions, search_filter
+from archolith_filter.filters.test_run_output import filter_test_output
+from archolith_filter.filters.typecheck_output import typecheck_filter
+from archolith_filter.raw_store import RawOutputStore, get_raw_output_store, reset_raw_output_store
+from archolith_filter.strip_ansi import strip_ansi
+from archolith_filter.telemetry import get_filter_telemetry_store, reset_filter_telemetry_store
 
 
 @pytest.fixture(autouse=True)
@@ -639,7 +639,7 @@ class TestCompoundLiteralType:
 
     @pytest.fixture
     def _clf(self):
-        from archolith_rtk.filters.read_file import _compound_literal_type
+        from archolith_filter.filters.read_file import _compound_literal_type
 
         return _compound_literal_type
 
@@ -739,7 +739,7 @@ class TestFilterOutput:
         def boom(*args, **kwargs):
             raise RuntimeError("broken")
 
-        monkeypatch.setattr("archolith_rtk._category_filter", boom)
+        monkeypatch.setattr("archolith_filter._category_filter", boom)
         r = filter_output(text, command="echo verbose")
         assert not r.truncated
         assert "\x1b" not in r.output
@@ -748,29 +748,29 @@ class TestFilterOutput:
 
 class TestToolClassification:
     def test_classify_passthrough_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("raw_output", "payload") == "passthrough"
+        assert archolith_filter._classify_tool("raw_output", "payload") == "passthrough"
 
     def test_classify_shell_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("run_command", "payload") == "shell"
+        assert archolith_filter._classify_tool("run_command", "payload") == "shell"
 
     def test_classify_read_file_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("read_file", "payload") == "read_file"
+        assert archolith_filter._classify_tool("read_file", "payload") == "read_file"
 
     def test_classify_mcp_json_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("mcp__memory__query", '{"items": []}') == "json"
+        assert archolith_filter._classify_tool("mcp__memory__query", '{"items": []}') == "json"
 
     def test_classify_unknown_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("custom_tool", "payload") == "generic"
+        assert archolith_filter._classify_tool("custom_tool", "payload") == "generic"
 
 
 # ─── raw output store ───
@@ -814,7 +814,7 @@ class TestRawOutputStore:
 
 class TestTelemetry:
     def test_record_and_summary(self):
-        from archolith_rtk.telemetry import record_filter_telemetry
+        from archolith_filter.telemetry import record_filter_telemetry
 
         record_filter_telemetry(
             command="git diff",
@@ -831,7 +831,7 @@ class TestTelemetry:
         assert summary.average_savings_pct == 80
 
     def test_format_summary(self):
-        from archolith_rtk.telemetry import record_filter_telemetry
+        from archolith_filter.telemetry import record_filter_telemetry
 
         record_filter_telemetry(
             command="test",
@@ -939,7 +939,7 @@ class TestCrossTurnDedupe:
         assert "repeated output" in r2.output
 
     def test_dedupe_tracker_unit(self):
-        from archolith_rtk.dedupe import DedupeTracker
+        from archolith_filter.dedupe import DedupeTracker
 
         tracker = DedupeTracker()
         assert tracker.check("hello") is None
@@ -1291,19 +1291,19 @@ class TestCsvEdgeCases:
 class TestDotkeyEdgeCases:
     def test_depth_4_rejected(self):
         """4 levels of nesting should be rejected at max_depth=3."""
-        from archolith_rtk.filters.json_output import _is_dottable
+        from archolith_filter.filters.json_output import _is_dottable
         data = {"a": {"b": {"c": {"d": 1}}}}
         assert not _is_dottable(data, max_depth=3)
 
     def test_depth_3_accepted(self):
         """3 levels of nesting should be accepted at max_depth=3."""
-        from archolith_rtk.filters.json_output import _is_dottable
+        from archolith_filter.filters.json_output import _is_dottable
         data = {"a": {"b": {"c": 1}}}
         assert _is_dottable(data, max_depth=3)
 
     def test_array_values_not_dottable(self):
         """Objects with array values should not be dottable."""
-        from archolith_rtk.filters.json_output import _is_dottable
+        from archolith_filter.filters.json_output import _is_dottable
         data = {"items": [1, 2, 3], "name": "test"}
         assert not _is_dottable(data, max_depth=3)
 

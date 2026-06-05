@@ -1,4 +1,4 @@
-# archolith-rtk - Qwen Instructions
+# archolith-filter - Qwen Instructions
 
 Before performing any tasks, research, or code modifications, you **MUST** read the contents of the [`.agent/`](.agent/) directory.
 

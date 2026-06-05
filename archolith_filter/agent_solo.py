@@ -25,8 +25,8 @@ returned unchanged.
 
 Usage::
 
-    from archolith_rtk.agent_solo import compress_agent_solo_turn, AgentSoloResult
-    from archolith_rtk.dedupe import DedupeTracker
+    from archolith_filter.agent_solo import compress_agent_solo_turn, AgentSoloResult
+    from archolith_filter.dedupe import DedupeTracker
 
     tracker = DedupeTracker()  # one per session
     result = compress_agent_solo_turn(

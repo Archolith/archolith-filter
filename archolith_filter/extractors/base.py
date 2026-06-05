@@ -16,7 +16,7 @@ try:
 
     _CONTEXT_AVAILABLE = True
 except ImportError:
-    from archolith_rtk.extractors._stubs import (  # noqa: F401
+    from archolith_filter.extractors._stubs import (  # noqa: F401
         PartialExtractionResult,
         ToolCallRecord,
         ToolExtractor,

@@ -1,8 +1,8 @@
-# archolith-rtk — Architecture
+# archolith-filter — Architecture
 
 ## Overview
 
-archolith-rtk is a deterministic Token Reduction Toolkit for LLM agent contexts. It compresses tool output, truncates oversized conversation messages, and applies mechanical turn-level compression — all without requiring LLM calls.
+archolith-filter is a deterministic Token Reduction Toolkit for LLM agent contexts. It compresses tool output, truncates oversized conversation messages, and applies mechanical turn-level compression — all without requiring LLM calls.
 
 The library is organized into three layers:
 
@@ -243,5 +243,5 @@ Risk-level presets adjust multiple thresholds together:
 
 ## External Dependencies
 
-- **tiktoken** (optional): Provides accurate token counting for Layer 2 shrink. Without it, falls back to heuristic of ~4 chars/token. Install via `archolith-rtk[tokenizer]`.
+- **tiktoken** (optional): Provides accurate token counting for Layer 2 shrink. Without it, falls back to heuristic of ~4 chars/token. Install via `archolith-filter[tokenizer]`.
 - No other external dependencies — the library is zero-dependency by default.

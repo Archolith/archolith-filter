@@ -5,8 +5,8 @@ Replaces long absolute paths with project-relative equivalents, normalizes
 files with the same relative path in different projects.
 
 Multi-project handling:
-    ``C:\\Users\\thron\\IdeaProjects\\projects\\archolith\\archolith-rtk\\archolith_rtk\\filters\\json_output.py``
-    → ``archolith-rtk/archolith_rtk/filters/json_output.py``
+    ``C:\\Users\\thron\\IdeaProjects\\projects\\archolith\\archolith-filter\\archolith_filter\\filters\\json_output.py``
+    → ``archolith-filter/archolith_filter/filters/json_output.py``
 
 Root detection strategies (priority order):
     1. ``ARCHOLITH_RTK_WORKSPACE_ROOT`` env var
@@ -135,7 +135,7 @@ def normalize_paths(text: str, config: PathConfig | None = None) -> str:
 
     - Strips the workspace root prefix for each path.
     - Preserves the project name and everything after it
-      (e.g., ``projects/archolith/archolith-rtk/...`` → ``archolith-rtk/...``).
+      (e.g., ``projects/archolith/archolith-filter/...`` → ``archolith-filter/...``).
     - Normalizes ``\\`` to ``/``.
     - Only normalizes paths that match a known root prefix.
     - Off-switch: ``ARCHOLITH_RTK_STRIP_WORKSPACE_ROOT=off`` disables this.

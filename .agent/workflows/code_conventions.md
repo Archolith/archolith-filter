@@ -1,4 +1,4 @@
-# Code Conventions — archolith-rtk
+# Code Conventions — archolith-filter
 
 ## Style
 
@@ -23,7 +23,7 @@
 ## File Organization
 
 ```
-archolith_rtk/
+archolith_filter/
 ├── __init__.py          # Public API surface — re-exports everything
 ├── classifier.py        # Command → category mapping
 ├── config.py            # FilterConfig, env-var loading, verbose boost
@@ -68,16 +68,16 @@ archolith_rtk/
 pytest tests/ -v
 
 # Run with coverage
-pytest tests/ -v --cov=archolith_rtk --cov-report=term-missing
+pytest tests/ -v --cov=archolith_filter --cov-report=term-missing
 
 # Coverage HTML report
-pytest tests/ -v --cov=archolith_rtk --cov-report=html
+pytest tests/ -v --cov=archolith_filter --cov-report=html
 
 # Lint
 ruff check .
 
 # Type check (if mypy installed)
-mypy archolith_rtk/
+mypy archolith_filter/
 ```
 
 ### Test conventions

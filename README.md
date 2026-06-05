@@ -1,4 +1,4 @@
-# archolith-rtk
+# archolith-filter
 
 Token Reduction Toolkit — deterministic output filtering for LLM agent contexts.
 
@@ -12,13 +12,13 @@ Part of the [archolith&trade;](https://archolith.dev) stack.
 ## Install
 
 ```bash
-pip install git+https://github.com/archolith/archolith-rtk.git
+pip install git+https://github.com/archolith/archolith-filter.git
 ```
 
 Optional tokenizer support (recommended for accuracy):
 
 ```bash
-pip install "archolith-rtk[tokenizer]"
+pip install "archolith-filter[tokenizer]"
 ```
 
 ## Architecture
@@ -68,7 +68,7 @@ Compress tool output before it enters the model context. Routes output through
 13 shell-command categories plus tool-routed `read_file` compression.
 
 ```python
-from archolith_rtk import filter_output
+from archolith_filter import filter_output
 
 result = filter_output(
     large_diff_text,
@@ -134,7 +134,7 @@ ARCHOLITH_RTK_FILTER_READ_LITERAL_THRESHOLD=8  # Collapse large fixture/literal 
 Programmatic callers can use the same presets without environment variables:
 
 ```python
-from archolith_rtk import FilterRiskLevel, base_config_for_risk_level, filter_output
+from archolith_filter import FilterRiskLevel, base_config_for_risk_level, filter_output
 
 config = base_config_for_risk_level(FilterRiskLevel.HIGH)
 result = filter_output(large_text, command="rg --heading prompt_tokens src", config=config)
@@ -159,7 +159,7 @@ Commands with verbose/debug flags get doubled head/tail limits automatically:
 When output is compressed, the original text is stored for recovery:
 
 ```python
-from archolith_rtk import get_raw_output_store
+from archolith_filter import get_raw_output_store
 
 store = get_raw_output_store()
 entry = store.get(raw_output_id)         # full raw text
@@ -171,7 +171,7 @@ tail = store.get_filtered(id, tail_lines=50)  # tail slice
 Filter calls are recorded for monitoring:
 
 ```python
-from archolith_rtk import get_filter_telemetry_store
+from archolith_filter import get_filter_telemetry_store
 
 summary = get_filter_telemetry_store().get_summary()
 print(f"Total calls: {summary.total_calls}")
@@ -184,7 +184,7 @@ Truncate oversized tool-role messages in conversation history. Two modes:
 char-based and token-based.
 
 ```python
-from archolith_rtk import (
+from archolith_filter import (
     ChatMessage,
     shrink_messages,
     shrink_oversized_tool_results,
@@ -220,7 +220,7 @@ it, falls back to a heuristic of ~4 chars/token (accurate for English/code,
 underestimates CJK).
 
 ```python
-from archolith_rtk import count_tokens
+from archolith_filter import count_tokens
 
 n = count_tokens("some text to count")
 ```
@@ -228,7 +228,7 @@ n = count_tokens("some text to count")
 ### Truncation Primitives
 
 ```python
-from archolith_rtk import truncate_for_chars, truncate_for_tokens
+from archolith_filter import truncate_for_chars, truncate_for_tokens
 
 # Head + 10% tail truncation with marker
 short = truncate_for_chars(huge_text, max_chars=5000)
@@ -239,7 +239,7 @@ short = truncate_for_tokens(huge_text, max_tokens=2000)
 
 ## Suite Boundary
 
-`archolith-rtk` is the deterministic hygiene layer of the Archolith suite:
+`archolith-filter` is the deterministic hygiene layer of the Archolith suite:
 
 - Layer 1: tool-output filtering
 - Layer 2: oversized message and tool-argument shrinking
@@ -262,7 +262,7 @@ pytest tests/ -v
 ruff check .
 
 # Type check (if mypy installed)
-mypy archolith_rtk/
+mypy archolith_filter/
 ```
 
 ## Benchmarking

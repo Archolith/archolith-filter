@@ -1,6 +1,6 @@
-"""Tests for archolith_rtk.redact — secret redaction module."""
+"""Tests for archolith_filter.redact — secret redaction module."""
 
-from archolith_rtk.redact import redact_secrets
+from archolith_filter.redact import redact_secrets
 
 
 class TestRedactSecrets:

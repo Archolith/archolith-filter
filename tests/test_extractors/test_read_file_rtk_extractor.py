@@ -5,8 +5,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from archolith_rtk.extractors.base import ToolCallRecord
-from archolith_rtk.extractors.read_file import ReadFileRtkExtractor
+from archolith_filter.extractors.base import ToolCallRecord
+from archolith_filter.extractors.read_file import ReadFileRtkExtractor
 
 
 @pytest.fixture

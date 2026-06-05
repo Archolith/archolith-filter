@@ -1,11 +1,11 @@
-"""Tests for archolith_rtk — Layer 2 shrink module."""
+"""Tests for archolith_filter — Layer 2 shrink module."""
 
 import json
 
 import pytest
 
-from archolith_rtk import shrink_messages
-from archolith_rtk.shrink import (
+from archolith_filter import shrink_messages
+from archolith_filter.shrink import (
     ChatMessage,
     ToolCall,
     ToolCallFunction,

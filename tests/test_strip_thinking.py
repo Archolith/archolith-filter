@@ -1,6 +1,6 @@
-"""Tests for archolith_rtk.strip_thinking — thinking block stripping."""
+"""Tests for archolith_filter.strip_thinking — thinking block stripping."""
 
-from archolith_rtk.strip_thinking import strip_thinking_blocks
+from archolith_filter.strip_thinking import strip_thinking_blocks
 
 
 class TestStripThinkingBlocks:

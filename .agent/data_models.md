@@ -1,4 +1,4 @@
-# archolith-rtk — Data Models
+# archolith-filter — Data Models
 
 ## Core Data Classes
 
@@ -225,7 +225,7 @@ class FilterTelemetrySummary:
 |------|----------|--------|
 | `CommandCategory` | `classifier.py` | 13 categories (see above) |
 
-`read_file` is routed as a tool-specific category string in `archolith_rtk.__init__`,
+`read_file` is routed as a tool-specific category string in `archolith_filter.__init__`,
 not as a `CommandCategory` enum value, because it is classified from tool name
 rather than from shell command text.
 

@@ -1,8 +1,8 @@
-"""Tests for archolith_rtk.paths — workspace path normalization."""
+"""Tests for archolith_filter.paths — workspace path normalization."""
 
 import pytest
 
-from archolith_rtk.paths import PathConfig, normalize_paths, reset_path_config
+from archolith_filter.paths import PathConfig, normalize_paths, reset_path_config
 
 
 @pytest.fixture(autouse=True)
@@ -16,14 +16,14 @@ class TestPathNormalization:
     def test_windows_path_shortened(self):
         config = PathConfig(
             workspace_root="C:/Users/thron/IdeaProjects",
-            project_roots=["C:/Users/thron/IdeaProjects/projects/archolith/archolith-rtk"],
+            project_roots=["C:/Users/thron/IdeaProjects/projects/archolith/archolith-filter"],
         )
         text = (
             "C:\\Users\\thron\\IdeaProjects\\projects\\archolith\\"
-            "archolith-rtk\\archolith_rtk\\filters\\json_output.py"
+            "archolith-filter\\archolith_filter\\filters\\json_output.py"
         )
         result = normalize_paths(text, config=config)
-        assert "archolith-rtk/archolith_rtk/filters/json_output.py" in result
+        assert "archolith-filter/archolith_filter/filters/json_output.py" in result
         assert "IdeaProjects" not in result
 
     def test_posix_path_shortened(self):
@@ -49,7 +49,7 @@ class TestPathNormalization:
     def test_path_outside_workspace_not_modified(self):
         config = PathConfig(
             workspace_root="C:/Users/thron/IdeaProjects",
-            project_roots=["C:/Users/thron/IdeaProjects/projects/archolith/archolith-rtk"],
+            project_roots=["C:/Users/thron/IdeaProjects/projects/archolith/archolith-filter"],
         )
         text = "/etc/nginx/nginx.conf"
         result = normalize_paths(text, config=config)
@@ -59,15 +59,15 @@ class TestPathNormalization:
         config = PathConfig(
             workspace_root="C:/Users/thron/IdeaProjects",
             project_roots=[
-                "C:/Users/thron/IdeaProjects/projects/archolith/archolith-rtk",
+                "C:/Users/thron/IdeaProjects/projects/archolith/archolith-filter",
                 "C:/Users/thron/IdeaProjects/projects/archolith/archolith-context",
             ],
         )
-        text_rtk = "C:/Users/thron/IdeaProjects/projects/archolith/archolith-rtk/src/main.py"
+        text_rtk = "C:/Users/thron/IdeaProjects/projects/archolith/archolith-filter/src/main.py"
         text_ctx = "C:/Users/thron/IdeaProjects/projects/archolith/archolith-context/src/main.py"
         result_rtk = normalize_paths(text_rtk, config=config)
         result_ctx = normalize_paths(text_ctx, config=config)
-        assert "archolith-rtk/src/main.py" in result_rtk
+        assert "archolith-filter/src/main.py" in result_rtk
         assert "archolith-context/src/main.py" in result_ctx
 
     def test_longest_root_prefix_wins(self):
@@ -102,7 +102,7 @@ class TestPathNormalization:
 
     def test_config_reset(self):
         """reset_path_config should clear the cached config."""
-        from archolith_rtk import paths
+        from archolith_filter import paths
 
         reset_path_config()
         assert paths._cached_config is None

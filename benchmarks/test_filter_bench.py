@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("pytest_benchmark")
 
-from archolith_rtk import filter_output
+from archolith_filter import filter_output
 
 
 def test_benchmark_filter_output_git_diff(benchmark, git_diff_large_text: str) -> None:

@@ -1,6 +1,6 @@
 """ReadFileRtkExtractor — RTK-enhanced Read file extractor.
 
-Uses archolith-rtk's ``read_file_filter()`` to detect structural
+Uses archolith-filter's ``read_file_filter()`` to detect structural
 characteristics (import-heavy, generated, CSS) and surfaces them as
 richer facts than the built-in ReadExtractor's line count.
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import httpx
 
-from archolith_rtk.extractors.base import (
+from archolith_filter.extractors.base import (
     PartialExtractionResult,
     RtkExtractorBase,
     ToolCallRecord,
@@ -69,7 +69,7 @@ class ReadFileRtkExtractor(RtkExtractorBase):
 
     def _detect_annotations(self, content: str) -> list[str]:
         """Run RTK's read_file_filter to detect structural characteristics."""
-        from archolith_rtk.filters.read_file import ReadFileFilterOptions, read_file_filter
+        from archolith_filter.filters.read_file import ReadFileFilterOptions, read_file_filter
 
         if not content.strip():
             return []

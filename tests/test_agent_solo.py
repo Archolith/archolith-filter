@@ -1,13 +1,13 @@
-"""Tests for archolith_rtk.agent_solo — agent-solo turn compression."""
+"""Tests for archolith_filter.agent_solo — agent-solo turn compression."""
 
 
-from archolith_rtk.agent_solo import (
+from archolith_filter.agent_solo import (
     AgentSoloStats,
     _is_compressible_tool,
     _split_sections,
     compress_agent_solo_turn,
 )
-from archolith_rtk.dedupe import DedupeTracker
+from archolith_filter.dedupe import DedupeTracker
 
 # ─── Helpers ───
 

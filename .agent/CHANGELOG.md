@@ -1,11 +1,11 @@
-# Changelog — archolith-rtk
+# Changelog — archolith-filter
 
 ## 2026-06-02 — Layer 0 pre-filter pipeline wiring
 
 - **Layer 0 pipeline**: Wired `redact_secrets()`, `strip_thinking_blocks()`, and `normalize_paths()` into `filter_output()` with per-stage config gating. Added binary detection (NUL-byte scan, early return at <10% text ratio), oversized input guard (500KB default threshold, head/tail preview), and table whitespace minimization in `fs_listing_filter()`.
 - **Runtime noise normalization**: `normalize_runtime_noise()` now called inside `log_filter()`, `build_filter()`, and `filter_test_output()` to replace timestamps/PIDs/elapsed times with stable placeholders.
 - **9 new config knobs**: `REDACT_ENABLED`, `BINARY_DETECTION_ENABLED`, `OVERSIZED_GUARD_ENABLED`, `OVERSIZED_MAX_CHARS`, `STRIP_THINKING_ENABLED`, `NORMALIZE_PATHS_ENABLED`, `NORMALIZE_NOISE_ENABLED`, `TABLE_WHITESPACE_MIN_ENABLED` — all toggleable via `ARCHOLITH_RTK_FILTER_*` env vars.
-- **Verification gates pass**: `ruff check archolith_rtk` (0 errors in package code), `pytest tests/` (335/335), `benchmarks/practical_report.py` (all scenarios and acceptance checks pass).
+- **Verification gates pass**: `ruff check archolith_filter` (0 errors in package code), `pytest tests/` (335/335), `benchmarks/practical_report.py` (all scenarios and acceptance checks pass).
 
 ## 2026-06-02 — format-switch benchmark coverage (Step 12)
 
@@ -48,7 +48,7 @@
 
 ## 2026-05-31 — completed quality remediation closeout
 
-- Committed the missing `normalize.py`, `paths.py`, `redact.py`, and `strip_thinking.py` modules that the trimmed public API already referenced, eliminating the detached-review import failure in `archolith_rtk.__init__`.
+- Committed the missing `normalize.py`, `paths.py`, `redact.py`, and `strip_thinking.py` modules that the trimmed public API already referenced, eliminating the detached-review import failure in `archolith_filter.__init__`.
 - Committed focused regression coverage for runtime-noise normalization, path normalization, secret redaction, and thinking-block stripping so the new public helpers are exercised directly.
 - Re-ran the full pytest suite (`293 passed, 1 skipped`) plus the targeted compound-literal regression subset (`13 passed`) to confirm the remediation plan now lands as a runnable work product rather than untracked drift.
 
@@ -72,7 +72,7 @@
 
 ## 2026-05-24 — removed Layer 3 suite surface from RTK
 
-- Removed `context_manager.py` and its public exports so `archolith-rtk` now owns only Layer 1 filtering, Layer 2 shrinking, and shared token/truncation primitives.
+- Removed `context_manager.py` and its public exports so `archolith-filter` now owns only Layer 1 filtering, Layer 2 shrinking, and shared token/truncation primitives.
 - Removed Layer 3 tests and benchmark coverage, including the context-fold scenario from the practical benchmark report.
 - Updated README, root changelog, and agent docs to describe `archolith-context` as the owner of conversation-level context strategy.
 
