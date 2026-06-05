@@ -148,21 +148,21 @@ class TestFilterConfig:
         assert low.json_max_value_length > balanced.json_max_value_length > high.json_max_value_length
 
     def test_env_risk_level_high_changes_defaults(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_RISK_LEVEL", "high")
+        monkeypatch.setenv("ARCHOLITH_FILTER_RISK_LEVEL", "high")
         cfg = from_env()
         assert cfg.risk_level == FilterRiskLevel.HIGH
         assert cfg.generic_head == 10
         assert cfg.search_max_matches_per_file == 3
 
     def test_invalid_env_risk_level_falls_back_to_balanced(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_RISK_LEVEL", "extreme")
+        monkeypatch.setenv("ARCHOLITH_FILTER_RISK_LEVEL", "extreme")
         cfg = from_env()
         assert cfg.risk_level == FilterRiskLevel.BALANCED
         assert cfg.generic_head == 20
 
     def test_explicit_env_override_wins_over_risk_level(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_RISK_LEVEL", "high")
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_GENERIC_HEAD", "42")
+        monkeypatch.setenv("ARCHOLITH_FILTER_RISK_LEVEL", "high")
+        monkeypatch.setenv("ARCHOLITH_FILTER_GENERIC_HEAD", "42")
         cfg = from_env()
         assert cfg.risk_level == FilterRiskLevel.HIGH
         assert cfg.generic_head == 42
@@ -688,7 +688,7 @@ class TestCompoundLiteralType:
 
 class TestFilterOutput:
     def test_disabled_returns_text(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTERS", "off")
+        monkeypatch.setenv("ARCHOLITH_FILTERS", "off")
         text = "x" * 1000
         r = filter_output(text, command="cat bigfile.txt")
         assert not r.truncated
@@ -925,7 +925,7 @@ class TestCrossTurnDedupe:
         assert r2.truncated
 
     def test_filtering_disabled_no_dedupe(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTERS", "off")
+        monkeypatch.setenv("ARCHOLITH_FILTERS", "off")
         text = "x" * 1000
         filter_output(text, command="echo")
         r2 = filter_output(text, command="echo")

@@ -142,7 +142,7 @@ def normalize_paths(text: str, config: PathConfig | None = None) -> str:
     """
     # Off-switch check (standalone safety valve for direct callers).
     # When called through the RTK pipeline (filter_output), the primary
-    # gate is ARCHOLITH_RTK_FILTER_NORMALIZE_PATHS_ENABLED in FilterConfig.
+    # gate is ARCHOLITH_FILTER_NORMALIZE_PATHS_ENABLED in FilterConfig.
     off = os.environ.get("ARCHOLITH_RTK_STRIP_WORKSPACE_ROOT", "")
     if off.lower() in ("off", "false", "0"):
         return text

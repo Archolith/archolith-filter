@@ -89,7 +89,7 @@ Tool output text
 ### Layer 1 — config.py
 
 `FilterConfig` dataclass with all per-category thresholds plus a `risk_level`
-preset selector. Loaded from `ARCHOLITH_RTK_FILTER_*` env vars via
+preset selector. Loaded from `ARCHOLITH_FILTER_*` env vars via
 `from_env()`. `base_config_for_risk_level()` returns programmatic presets for
 `low`, `balanced`, and `high` risk. Explicit env-var overrides are applied on
 top of the selected preset. `boost_for_verbose()` doubles head/tail limits for
@@ -160,78 +160,78 @@ Minimum content length for hashing: 200 chars (`_DEDUP_MIN_CHARS`).
 
 ## Configuration / Environment Variables
 
-All env vars use the prefix `ARCHOLITH_RTK_FILTER_`:
+All env vars use the prefix `ARCHOLITH_FILTER_`:
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `ARCHOLITH_RTK_FILTERS` | Set to `off`/`false`/`0` to disable all filtering | enabled |
-| `ARCHOLITH_RTK_FILTER_RISK_LEVEL` | Preset compression posture: `low`, `balanced`, or `high` | `balanced` |
-| `ARCHOLITH_RTK_FILTER_GENERIC_HEAD` | Generic head lines | 20 |
-| `ARCHOLITH_RTK_FILTER_GENERIC_TAIL` | Generic tail lines | 30 |
-| `ARCHOLITH_RTK_FILTER_TEST_HEAD` | Test head lines | 10 |
-| `ARCHOLITH_RTK_FILTER_TEST_TAIL` | Test tail lines | 40 |
-| `ARCHOLITH_RTK_FILTER_BUILD_HEAD` | Build head lines | 15 |
-| `ARCHOLITH_RTK_FILTER_BUILD_TAIL` | Build tail lines | 25 |
-| `ARCHOLITH_RTK_FILTER_LINT_HEAD` | Lint head lines | 15 |
-| `ARCHOLITH_RTK_FILTER_LINT_TAIL` | Lint tail lines | 30 |
-| `ARCHOLITH_RTK_FILTER_TYPECHECK_HEAD` | Typecheck head lines | 15 |
-| `ARCHOLITH_RTK_FILTER_TYPECHECK_TAIL` | Typecheck tail lines | 30 |
-| `ARCHOLITH_RTK_FILTER_GIT_DIFF_FILE_HEAD` | Lines per file in diff stat | 15 |
-| `ARCHOLITH_RTK_FILTER_GIT_DIFF_TAIL` | Diff body tail lines | 20 |
-| `ARCHOLITH_RTK_FILTER_GIT_LOG_HEAD` | Git log head commits | 25 |
-| `ARCHOLITH_RTK_FILTER_GIT_LOG_TAIL` | Git log tail commits | 15 |
-| `ARCHOLITH_RTK_FILTER_GIT_STATUS_HEAD` | Git status head lines | 50 |
-| `ARCHOLITH_RTK_FILTER_GIT_STATUS_TAIL` | Git status tail lines | 30 |
-| `ARCHOLITH_RTK_FILTER_LOG_HEAD` | Log head lines | 15 |
-| `ARCHOLITH_RTK_FILTER_LOG_TAIL` | Log tail lines | 30 |
-| `ARCHOLITH_RTK_FILTER_LOG_MAX_DUPE` | Max consecutive duplicate lines | 3 |
-| `ARCHOLITH_RTK_FILTER_FS_MAX_ENTRIES` | Max filesystem entries | 50 |
-| `ARCHOLITH_RTK_FILTER_FS_HEAD` | FS listing head lines | 20 |
-| `ARCHOLITH_RTK_FILTER_FS_TAIL` | FS listing tail lines | 30 |
-| `ARCHOLITH_RTK_FILTER_SEARCH_MAX_MATCHES` | Max matches per file | 5 |
-| `ARCHOLITH_RTK_FILTER_SEARCH_MAX_FILES` | Max files in search results | 15 |
-| `ARCHOLITH_RTK_FILTER_SEARCH_HEAD` | Search head lines | 20 |
-| `ARCHOLITH_RTK_FILTER_SEARCH_TAIL` | Search tail lines | 30 |
-| `ARCHOLITH_RTK_FILTER_JSON_MAX_KEYS` | Max keys per JSON object | 10 |
-| `ARCHOLITH_RTK_FILTER_JSON_MAX_ARRAY` | Max JSON array items | 5 |
-| `ARCHOLITH_RTK_FILTER_JSON_MAX_DEPTH` | Max JSON recursion depth | 3 |
-| `ARCHOLITH_RTK_FILTER_JSON_MAX_VALUE_LEN` | Max JSON value length | 80 |
-| `ARCHOLITH_RTK_FILTER_JSON_CSV_ENABLED` | Enable CSV format-switch for tabular arrays | 1 |
-| `ARCHOLITH_RTK_FILTER_JSON_CSV_MIN_ROWS` | Min rows for CSV format-switch | 3 |
-| `ARCHOLITH_RTK_FILTER_JSON_CSV_MAX_ROWS` | Max rows in CSV output | 20 |
-| `ARCHOLITH_RTK_FILTER_JSON_CSV_MAX_KEY_LEN` | Max CSV key length | 40 |
-| `ARCHOLITH_RTK_FILTER_JSON_KV_ENABLED` | Enable key-value format-switch | 1 |
-| `ARCHOLITH_RTK_FILTER_JSON_KV_MIN_KEYS` | Min keys for key-value format-switch | 3 |
-| `ARCHOLITH_RTK_FILTER_JSON_KV_MAX_KEYS` | Max keys in key-value output | 20 |
-| `ARCHOLITH_RTK_FILTER_JSON_DOTKEY_ENABLED` | Enable dotted-key format-switch | 1 |
-| `ARCHOLITH_RTK_FILTER_JSON_DOTKEY_MAX_KEYS` | Max keys in dotted-key output | 30 |
-| `ARCHOLITH_RTK_FILTER_JSON_DOTKEY_MAX_DEPTH` | Max depth for dotted-key flattening | 3 |
-| `ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_ENABLED` | Enable CSV column factoring | 1 |
-| `ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_THRESHOLD` | Dominant value threshold for factoring | 0.8 |
-| `ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_MAX_COLS` | Max factored columns | 3 |
-| `ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_ENABLED` | Enable stack trace frame collapsing | 1 |
-| `ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_MIN_FRAMES` | Min frames for stack collapsing | 5 |
-| `ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_KEEP_APP` | App frames to keep at start/end | 2 |
-| `ARCHOLITH_RTK_FILTER_GIT_STATUS_GROUP_ENABLED` | Enable git status prefix grouping | 1 |
-| `ARCHOLITH_RTK_FILTER_GIT_STATUS_GROUP_MAX` | Max files per grouped line | 10 |
-| `ARCHOLITH_RTK_FILTER_SEARCH_HEADING_REFORMAT_ENABLED` | Enable search heading reformat | 1 |
-| `ARCHOLITH_RTK_FILTER_BUILD_SUMMARY_ENABLED` | Enable build task summary | 1 |
-| `ARCHOLITH_RTK_FILTER_FS_LSL_ABBREVIATE_ENABLED` | Enable ls -la abbreviation | 1 |
-| `ARCHOLITH_RTK_FILTER_READ_IMPORTS_COLLAPSE` | Collapse large import blocks | 1 |
-| `ARCHOLITH_RTK_FILTER_READ_BLANK_LINE_MAX` | Max consecutive blank lines kept in `read_file` output | 1 |
-| `ARCHOLITH_RTK_FILTER_READ_COMMENT_THRESHOLD` | Comment-run collapse threshold for `read_file` output | 10 |
-| `ARCHOLITH_RTK_FILTER_READ_CSS_RULE_COLLAPSE` | Collapse verbose CSS rule bodies | 1 |
-| `ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_LINE_LEN` | Long-line threshold for generated/minified block collapse | 500 |
-| `ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_RUN` | Consecutive long lines required before collapsing generated/minified blocks | 5 |
-| `ARCHOLITH_RTK_FILTER_READ_LITERAL_THRESHOLD` | Collapse threshold for multiline strings and large literal blocks | 8 |
-| `ARCHOLITH_RTK_FILTER_REDACT_ENABLED` | Enable secret redaction | 1 |
-| `ARCHOLITH_RTK_FILTER_STRIP_THINKING_ENABLED` | Enable thinking block stripping | 1 |
-| `ARCHOLITH_RTK_FILTER_NORMALIZE_PATHS_ENABLED` | Enable path normalization | 1 |
-| `ARCHOLITH_RTK_FILTER_BINARY_DETECTION_ENABLED` | Enable binary output detection | 1 |
-| `ARCHOLITH_RTK_FILTER_OVERSIZED_GUARD_ENABLED` | Enable oversized input guard | 1 |
-| `ARCHOLITH_RTK_FILTER_OVERSIZED_MAX_CHARS` | Threshold for oversized guard (chars) | 500000 |
-| `ARCHOLITH_RTK_FILTER_NORMALIZE_NOISE_ENABLED` | Enable runtime noise normalization in log/build/test filters | 1 |
-| `ARCHOLITH_RTK_FILTER_TABLE_WHITESPACE_MIN_ENABLED` | Enable table whitespace minimization | 1 |
+| `ARCHOLITH_FILTERS` | Set to `off`/`false`/`0` to disable all filtering | enabled |
+| `ARCHOLITH_FILTER_RISK_LEVEL` | Preset compression posture: `low`, `balanced`, or `high` | `balanced` |
+| `ARCHOLITH_FILTER_GENERIC_HEAD` | Generic head lines | 20 |
+| `ARCHOLITH_FILTER_GENERIC_TAIL` | Generic tail lines | 30 |
+| `ARCHOLITH_FILTER_TEST_HEAD` | Test head lines | 10 |
+| `ARCHOLITH_FILTER_TEST_TAIL` | Test tail lines | 40 |
+| `ARCHOLITH_FILTER_BUILD_HEAD` | Build head lines | 15 |
+| `ARCHOLITH_FILTER_BUILD_TAIL` | Build tail lines | 25 |
+| `ARCHOLITH_FILTER_LINT_HEAD` | Lint head lines | 15 |
+| `ARCHOLITH_FILTER_LINT_TAIL` | Lint tail lines | 30 |
+| `ARCHOLITH_FILTER_TYPECHECK_HEAD` | Typecheck head lines | 15 |
+| `ARCHOLITH_FILTER_TYPECHECK_TAIL` | Typecheck tail lines | 30 |
+| `ARCHOLITH_FILTER_GIT_DIFF_FILE_HEAD` | Lines per file in diff stat | 15 |
+| `ARCHOLITH_FILTER_GIT_DIFF_TAIL` | Diff body tail lines | 20 |
+| `ARCHOLITH_FILTER_GIT_LOG_HEAD` | Git log head commits | 25 |
+| `ARCHOLITH_FILTER_GIT_LOG_TAIL` | Git log tail commits | 15 |
+| `ARCHOLITH_FILTER_GIT_STATUS_HEAD` | Git status head lines | 50 |
+| `ARCHOLITH_FILTER_GIT_STATUS_TAIL` | Git status tail lines | 30 |
+| `ARCHOLITH_FILTER_LOG_HEAD` | Log head lines | 15 |
+| `ARCHOLITH_FILTER_LOG_TAIL` | Log tail lines | 30 |
+| `ARCHOLITH_FILTER_LOG_MAX_DUPE` | Max consecutive duplicate lines | 3 |
+| `ARCHOLITH_FILTER_FS_MAX_ENTRIES` | Max filesystem entries | 50 |
+| `ARCHOLITH_FILTER_FS_HEAD` | FS listing head lines | 20 |
+| `ARCHOLITH_FILTER_FS_TAIL` | FS listing tail lines | 30 |
+| `ARCHOLITH_FILTER_SEARCH_MAX_MATCHES` | Max matches per file | 5 |
+| `ARCHOLITH_FILTER_SEARCH_MAX_FILES` | Max files in search results | 15 |
+| `ARCHOLITH_FILTER_SEARCH_HEAD` | Search head lines | 20 |
+| `ARCHOLITH_FILTER_SEARCH_TAIL` | Search tail lines | 30 |
+| `ARCHOLITH_FILTER_JSON_MAX_KEYS` | Max keys per JSON object | 10 |
+| `ARCHOLITH_FILTER_JSON_MAX_ARRAY` | Max JSON array items | 5 |
+| `ARCHOLITH_FILTER_JSON_MAX_DEPTH` | Max JSON recursion depth | 3 |
+| `ARCHOLITH_FILTER_JSON_MAX_VALUE_LEN` | Max JSON value length | 80 |
+| `ARCHOLITH_FILTER_JSON_CSV_ENABLED` | Enable CSV format-switch for tabular arrays | 1 |
+| `ARCHOLITH_FILTER_JSON_CSV_MIN_ROWS` | Min rows for CSV format-switch | 3 |
+| `ARCHOLITH_FILTER_JSON_CSV_MAX_ROWS` | Max rows in CSV output | 20 |
+| `ARCHOLITH_FILTER_JSON_CSV_MAX_KEY_LEN` | Max CSV key length | 40 |
+| `ARCHOLITH_FILTER_JSON_KV_ENABLED` | Enable key-value format-switch | 1 |
+| `ARCHOLITH_FILTER_JSON_KV_MIN_KEYS` | Min keys for key-value format-switch | 3 |
+| `ARCHOLITH_FILTER_JSON_KV_MAX_KEYS` | Max keys in key-value output | 20 |
+| `ARCHOLITH_FILTER_JSON_DOTKEY_ENABLED` | Enable dotted-key format-switch | 1 |
+| `ARCHOLITH_FILTER_JSON_DOTKEY_MAX_KEYS` | Max keys in dotted-key output | 30 |
+| `ARCHOLITH_FILTER_JSON_DOTKEY_MAX_DEPTH` | Max depth for dotted-key flattening | 3 |
+| `ARCHOLITH_FILTER_JSON_CSV_FACTOR_ENABLED` | Enable CSV column factoring | 1 |
+| `ARCHOLITH_FILTER_JSON_CSV_FACTOR_THRESHOLD` | Dominant value threshold for factoring | 0.8 |
+| `ARCHOLITH_FILTER_JSON_CSV_FACTOR_MAX_COLS` | Max factored columns | 3 |
+| `ARCHOLITH_FILTER_GENERIC_STACK_COLLAPSE_ENABLED` | Enable stack trace frame collapsing | 1 |
+| `ARCHOLITH_FILTER_GENERIC_STACK_COLLAPSE_MIN_FRAMES` | Min frames for stack collapsing | 5 |
+| `ARCHOLITH_FILTER_GENERIC_STACK_COLLAPSE_KEEP_APP` | App frames to keep at start/end | 2 |
+| `ARCHOLITH_FILTER_GIT_STATUS_GROUP_ENABLED` | Enable git status prefix grouping | 1 |
+| `ARCHOLITH_FILTER_GIT_STATUS_GROUP_MAX` | Max files per grouped line | 10 |
+| `ARCHOLITH_FILTER_SEARCH_HEADING_REFORMAT_ENABLED` | Enable search heading reformat | 1 |
+| `ARCHOLITH_FILTER_BUILD_SUMMARY_ENABLED` | Enable build task summary | 1 |
+| `ARCHOLITH_FILTER_FS_LSL_ABBREVIATE_ENABLED` | Enable ls -la abbreviation | 1 |
+| `ARCHOLITH_FILTER_READ_IMPORTS_COLLAPSE` | Collapse large import blocks | 1 |
+| `ARCHOLITH_FILTER_READ_BLANK_LINE_MAX` | Max consecutive blank lines kept in `read_file` output | 1 |
+| `ARCHOLITH_FILTER_READ_COMMENT_THRESHOLD` | Comment-run collapse threshold for `read_file` output | 10 |
+| `ARCHOLITH_FILTER_READ_CSS_RULE_COLLAPSE` | Collapse verbose CSS rule bodies | 1 |
+| `ARCHOLITH_FILTER_READ_GENERATED_MIN_LINE_LEN` | Long-line threshold for generated/minified block collapse | 500 |
+| `ARCHOLITH_FILTER_READ_GENERATED_MIN_RUN` | Consecutive long lines required before collapsing generated/minified blocks | 5 |
+| `ARCHOLITH_FILTER_READ_LITERAL_THRESHOLD` | Collapse threshold for multiline strings and large literal blocks | 8 |
+| `ARCHOLITH_FILTER_REDACT_ENABLED` | Enable secret redaction | 1 |
+| `ARCHOLITH_FILTER_STRIP_THINKING_ENABLED` | Enable thinking block stripping | 1 |
+| `ARCHOLITH_FILTER_NORMALIZE_PATHS_ENABLED` | Enable path normalization | 1 |
+| `ARCHOLITH_FILTER_BINARY_DETECTION_ENABLED` | Enable binary output detection | 1 |
+| `ARCHOLITH_FILTER_OVERSIZED_GUARD_ENABLED` | Enable oversized input guard | 1 |
+| `ARCHOLITH_FILTER_OVERSIZED_MAX_CHARS` | Threshold for oversized guard (chars) | 500000 |
+| `ARCHOLITH_FILTER_NORMALIZE_NOISE_ENABLED` | Enable runtime noise normalization in log/build/test filters | 1 |
+| `ARCHOLITH_FILTER_TABLE_WHITESPACE_MIN_ENABLED` | Enable table whitespace minimization | 1 |
 
 All numeric values are clamped to upper bounds (lines: 500, entries: 1000, depth: 10, value length: 10000).
 

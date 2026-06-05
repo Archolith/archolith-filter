@@ -34,7 +34,7 @@ Both layers are deterministic and require no LLM calls.
 
 Before category-specific filtering, every tool output passes through a Layer 0
 pre-filter pipeline. Each stage is individually toggleable via
-`ARCHOLITH_RTK_FILTER_*_ENABLED` env vars (all enabled by default):
+`ARCHOLITH_FILTER_*_ENABLED` env vars (all enabled by default):
 
 1. **Secret redaction** — Strips API keys, tokens, credentials, and connection
    strings using compiled alternation regex. Runs before anything else touches
@@ -105,27 +105,27 @@ print(result.truncated)      # whether compression occurred
 
 - **Failed commands** (non-zero exit code or timeout): ANSI-stripped only, no filtering
 - **Small output** (<500 chars): returned as-is, overhead would exceed savings
-- **Disabled** (`ARCHOLITH_RTK_FILTERS=off`): no filtering applied
+- **Disabled** (`ARCHOLITH_FILTERS=off`): no filtering applied
 - **Exceptions**: fail-open — returns ANSI-stripped string unchanged
 
 ### Configuration
 
 All thresholds are configurable via environment variables with the prefix
-`ARCHOLITH_RTK_FILTER_*`:
+`ARCHOLITH_FILTER_*`:
 
 ```bash
-ARCHOLITH_RTK_FILTERS=off                    # Disable all filtering
-ARCHOLITH_RTK_FILTER_RISK_LEVEL=balanced    # low | balanced | high
-ARCHOLITH_RTK_FILTER_GENERIC_HEAD=20         # Generic head lines
-ARCHOLITH_RTK_FILTER_GENERIC_TAIL=30         # Generic tail lines
-ARCHOLITH_RTK_FILTER_GIT_DIFF_FILE_HEAD=5    # Lines per file in diff stat
-ARCHOLITH_RTK_FILTER_GIT_DIFF_TAIL=50        # Diff body tail lines
-ARCHOLITH_RTK_FILTER_TEST_HEAD=10            # Test output head lines
-ARCHOLITH_RTK_FILTER_TEST_TAIL=40            # Test output tail lines
-ARCHOLITH_RTK_FILTER_READ_LITERAL_THRESHOLD=8  # Collapse large fixture/literal blocks
+ARCHOLITH_FILTERS=off                    # Disable all filtering
+ARCHOLITH_FILTER_RISK_LEVEL=balanced    # low | balanced | high
+ARCHOLITH_FILTER_GENERIC_HEAD=20         # Generic head lines
+ARCHOLITH_FILTER_GENERIC_TAIL=30         # Generic tail lines
+ARCHOLITH_FILTER_GIT_DIFF_FILE_HEAD=5    # Lines per file in diff stat
+ARCHOLITH_FILTER_GIT_DIFF_TAIL=50        # Diff body tail lines
+ARCHOLITH_FILTER_TEST_HEAD=10            # Test output head lines
+ARCHOLITH_FILTER_TEST_TAIL=40            # Test output tail lines
+ARCHOLITH_FILTER_READ_LITERAL_THRESHOLD=8  # Collapse large fixture/literal blocks
 ```
 
-`ARCHOLITH_RTK_FILTER_RISK_LEVEL` controls the default compression posture:
+`ARCHOLITH_FILTER_RISK_LEVEL` controls the default compression posture:
 
 - `low`: lower risk of information loss, lower token savings
 - `balanced`: default preset
@@ -141,8 +141,8 @@ result = filter_output(large_text, command="rg --heading prompt_tokens src", con
 ```
 
 Explicit environment-variable overrides still win over the preset. For example,
-`ARCHOLITH_RTK_FILTER_RISK_LEVEL=high` plus
-`ARCHOLITH_RTK_FILTER_JSON_MAX_DEPTH=4` uses the high-risk preset for everything
+`ARCHOLITH_FILTER_RISK_LEVEL=high` plus
+`ARCHOLITH_FILTER_JSON_MAX_DEPTH=4` uses the high-risk preset for everything
 except JSON depth, which is forced to `4`.
 
 ### Verbose Boosting

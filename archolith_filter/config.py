@@ -256,202 +256,202 @@ def base_config_for_risk_level(level: str | FilterRiskLevel = FilterRiskLevel.BA
 
 
 def from_env() -> FilterConfig:
-    """Load filter config from environment variables (ARCHOLITH_RTK_FILTER_*)."""
-    risk_level = normalize_risk_level(os.environ.get("ARCHOLITH_RTK_FILTER_RISK_LEVEL"))
+    """Load filter config from environment variables (ARCHOLITH_FILTER_*)."""
+    risk_level = normalize_risk_level(os.environ.get("ARCHOLITH_FILTER_RISK_LEVEL"))
     base = base_config_for_risk_level(risk_level)
     return FilterConfig(
         risk_level=risk_level,
-        generic_head=_env_int("ARCHOLITH_RTK_FILTER_GENERIC_HEAD", base.generic_head, _MAX_LINE_LINES),
-        generic_tail=_env_int("ARCHOLITH_RTK_FILTER_GENERIC_TAIL", base.generic_tail, _MAX_LINE_LINES),
-        test_head=_env_int("ARCHOLITH_RTK_FILTER_TEST_HEAD", base.test_head, _MAX_LINE_LINES),
-        test_tail=_env_int("ARCHOLITH_RTK_FILTER_TEST_TAIL", base.test_tail, _MAX_LINE_LINES),
-        build_head=_env_int("ARCHOLITH_RTK_FILTER_BUILD_HEAD", base.build_head, _MAX_LINE_LINES),
-        build_tail=_env_int("ARCHOLITH_RTK_FILTER_BUILD_TAIL", base.build_tail, _MAX_LINE_LINES),
-        lint_head=_env_int("ARCHOLITH_RTK_FILTER_LINT_HEAD", base.lint_head, _MAX_LINE_LINES),
-        lint_tail=_env_int("ARCHOLITH_RTK_FILTER_LINT_TAIL", base.lint_tail, _MAX_LINE_LINES),
-        typecheck_head=_env_int("ARCHOLITH_RTK_FILTER_TYPECHECK_HEAD", base.typecheck_head, _MAX_LINE_LINES),
-        typecheck_tail=_env_int("ARCHOLITH_RTK_FILTER_TYPECHECK_TAIL", base.typecheck_tail, _MAX_LINE_LINES),
+        generic_head=_env_int("ARCHOLITH_FILTER_GENERIC_HEAD", base.generic_head, _MAX_LINE_LINES),
+        generic_tail=_env_int("ARCHOLITH_FILTER_GENERIC_TAIL", base.generic_tail, _MAX_LINE_LINES),
+        test_head=_env_int("ARCHOLITH_FILTER_TEST_HEAD", base.test_head, _MAX_LINE_LINES),
+        test_tail=_env_int("ARCHOLITH_FILTER_TEST_TAIL", base.test_tail, _MAX_LINE_LINES),
+        build_head=_env_int("ARCHOLITH_FILTER_BUILD_HEAD", base.build_head, _MAX_LINE_LINES),
+        build_tail=_env_int("ARCHOLITH_FILTER_BUILD_TAIL", base.build_tail, _MAX_LINE_LINES),
+        lint_head=_env_int("ARCHOLITH_FILTER_LINT_HEAD", base.lint_head, _MAX_LINE_LINES),
+        lint_tail=_env_int("ARCHOLITH_FILTER_LINT_TAIL", base.lint_tail, _MAX_LINE_LINES),
+        typecheck_head=_env_int("ARCHOLITH_FILTER_TYPECHECK_HEAD", base.typecheck_head, _MAX_LINE_LINES),
+        typecheck_tail=_env_int("ARCHOLITH_FILTER_TYPECHECK_TAIL", base.typecheck_tail, _MAX_LINE_LINES),
         git_diff_file_head=_env_int(
-            "ARCHOLITH_RTK_FILTER_GIT_DIFF_FILE_HEAD", base.git_diff_file_head, _MAX_LINE_LINES
+            "ARCHOLITH_FILTER_GIT_DIFF_FILE_HEAD", base.git_diff_file_head, _MAX_LINE_LINES
         ),
-        git_diff_tail=_env_int("ARCHOLITH_RTK_FILTER_GIT_DIFF_TAIL", base.git_diff_tail, _MAX_LINE_LINES),
-        git_log_head=_env_int("ARCHOLITH_RTK_FILTER_GIT_LOG_HEAD", base.git_log_head, _MAX_LINE_LINES),
-        git_log_tail=_env_int("ARCHOLITH_RTK_FILTER_GIT_LOG_TAIL", base.git_log_tail, _MAX_LINE_LINES),
-        git_status_head=_env_int("ARCHOLITH_RTK_FILTER_GIT_STATUS_HEAD", base.git_status_head, _MAX_LINE_LINES),
-        git_status_tail=_env_int("ARCHOLITH_RTK_FILTER_GIT_STATUS_TAIL", base.git_status_tail, _MAX_LINE_LINES),
-        log_head=_env_int("ARCHOLITH_RTK_FILTER_LOG_HEAD", base.log_head, _MAX_LINE_LINES),
-        log_tail=_env_int("ARCHOLITH_RTK_FILTER_LOG_TAIL", base.log_tail, _MAX_LINE_LINES),
+        git_diff_tail=_env_int("ARCHOLITH_FILTER_GIT_DIFF_TAIL", base.git_diff_tail, _MAX_LINE_LINES),
+        git_log_head=_env_int("ARCHOLITH_FILTER_GIT_LOG_HEAD", base.git_log_head, _MAX_LINE_LINES),
+        git_log_tail=_env_int("ARCHOLITH_FILTER_GIT_LOG_TAIL", base.git_log_tail, _MAX_LINE_LINES),
+        git_status_head=_env_int("ARCHOLITH_FILTER_GIT_STATUS_HEAD", base.git_status_head, _MAX_LINE_LINES),
+        git_status_tail=_env_int("ARCHOLITH_FILTER_GIT_STATUS_TAIL", base.git_status_tail, _MAX_LINE_LINES),
+        log_head=_env_int("ARCHOLITH_FILTER_LOG_HEAD", base.log_head, _MAX_LINE_LINES),
+        log_tail=_env_int("ARCHOLITH_FILTER_LOG_TAIL", base.log_tail, _MAX_LINE_LINES),
         log_max_consecutive_dupes=_env_int(
-            "ARCHOLITH_RTK_FILTER_LOG_MAX_DUPE", base.log_max_consecutive_dupes, _MAX_LINE_LINES
+            "ARCHOLITH_FILTER_LOG_MAX_DUPE", base.log_max_consecutive_dupes, _MAX_LINE_LINES
         ),
-        fs_max_entries=_env_int("ARCHOLITH_RTK_FILTER_FS_MAX_ENTRIES", base.fs_max_entries, _MAX_ENTRIES),
-        fs_head_lines=_env_int("ARCHOLITH_RTK_FILTER_FS_HEAD", base.fs_head_lines, _MAX_LINE_LINES),
-        fs_tail_lines=_env_int("ARCHOLITH_RTK_FILTER_FS_TAIL", base.fs_tail_lines, _MAX_LINE_LINES),
+        fs_max_entries=_env_int("ARCHOLITH_FILTER_FS_MAX_ENTRIES", base.fs_max_entries, _MAX_ENTRIES),
+        fs_head_lines=_env_int("ARCHOLITH_FILTER_FS_HEAD", base.fs_head_lines, _MAX_LINE_LINES),
+        fs_tail_lines=_env_int("ARCHOLITH_FILTER_FS_TAIL", base.fs_tail_lines, _MAX_LINE_LINES),
         search_max_matches_per_file=_env_int(
-            "ARCHOLITH_RTK_FILTER_SEARCH_MAX_MATCHES", base.search_max_matches_per_file, _MAX_ENTRIES
+            "ARCHOLITH_FILTER_SEARCH_MAX_MATCHES", base.search_max_matches_per_file, _MAX_ENTRIES
         ),
-        search_max_files=_env_int("ARCHOLITH_RTK_FILTER_SEARCH_MAX_FILES", base.search_max_files, _MAX_ENTRIES),
-        search_head_lines=_env_int("ARCHOLITH_RTK_FILTER_SEARCH_HEAD", base.search_head_lines, _MAX_LINE_LINES),
-        search_tail_lines=_env_int("ARCHOLITH_RTK_FILTER_SEARCH_TAIL", base.search_tail_lines, _MAX_LINE_LINES),
+        search_max_files=_env_int("ARCHOLITH_FILTER_SEARCH_MAX_FILES", base.search_max_files, _MAX_ENTRIES),
+        search_head_lines=_env_int("ARCHOLITH_FILTER_SEARCH_HEAD", base.search_head_lines, _MAX_LINE_LINES),
+        search_tail_lines=_env_int("ARCHOLITH_FILTER_SEARCH_TAIL", base.search_tail_lines, _MAX_LINE_LINES),
 json_max_keys_per_object=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_MAX_KEYS", base.json_max_keys_per_object, _MAX_ENTRIES
+            "ARCHOLITH_FILTER_JSON_MAX_KEYS", base.json_max_keys_per_object, _MAX_ENTRIES
         ),
         json_max_array_items=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_MAX_ARRAY", base.json_max_array_items, _MAX_ENTRIES
+            "ARCHOLITH_FILTER_JSON_MAX_ARRAY", base.json_max_array_items, _MAX_ENTRIES
         ),
         json_max_depth=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_MAX_DEPTH", base.json_max_depth, _MAX_DEPTH
+            "ARCHOLITH_FILTER_JSON_MAX_DEPTH", base.json_max_depth, _MAX_DEPTH
         ),
         json_max_value_length=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_MAX_VALUE_LEN", base.json_max_value_length, _MAX_VALUE_LENGTH
+            "ARCHOLITH_FILTER_JSON_MAX_VALUE_LEN", base.json_max_value_length, _MAX_VALUE_LENGTH
         ),
         # JSON format-switch knobs
         json_csv_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_CSV_ENABLED", 1 if base.json_csv_enabled else 0, 1
+            "ARCHOLITH_FILTER_JSON_CSV_ENABLED", 1 if base.json_csv_enabled else 0, 1
         ) == 1,
         json_csv_min_rows=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_CSV_MIN_ROWS", base.json_csv_min_rows, _MAX_ENTRIES
+            "ARCHOLITH_FILTER_JSON_CSV_MIN_ROWS", base.json_csv_min_rows, _MAX_ENTRIES
         ),
         json_csv_max_rows=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_CSV_MAX_ROWS", base.json_csv_max_rows, _MAX_ENTRIES
+            "ARCHOLITH_FILTER_JSON_CSV_MAX_ROWS", base.json_csv_max_rows, _MAX_ENTRIES
         ),
         json_csv_max_key_length=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_CSV_MAX_KEY_LEN", base.json_csv_max_key_length, _MAX_VALUE_LENGTH
+            "ARCHOLITH_FILTER_JSON_CSV_MAX_KEY_LEN", base.json_csv_max_key_length, _MAX_VALUE_LENGTH
         ),
         json_kv_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_KV_ENABLED", 1 if base.json_kv_enabled else 0, 1
+            "ARCHOLITH_FILTER_JSON_KV_ENABLED", 1 if base.json_kv_enabled else 0, 1
         ) == 1,
         json_kv_min_keys=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_KV_MIN_KEYS", base.json_kv_min_keys, _MAX_ENTRIES
+            "ARCHOLITH_FILTER_JSON_KV_MIN_KEYS", base.json_kv_min_keys, _MAX_ENTRIES
         ),
         json_kv_max_keys=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_KV_MAX_KEYS", base.json_kv_max_keys, _MAX_ENTRIES
+            "ARCHOLITH_FILTER_JSON_KV_MAX_KEYS", base.json_kv_max_keys, _MAX_ENTRIES
         ),
         json_dotkey_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_DOTKEY_ENABLED", 1 if base.json_dotkey_enabled else 0, 1
+            "ARCHOLITH_FILTER_JSON_DOTKEY_ENABLED", 1 if base.json_dotkey_enabled else 0, 1
         ) == 1,
         json_dotkey_max_keys=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_DOTKEY_MAX_KEYS", base.json_dotkey_max_keys, _MAX_ENTRIES
+            "ARCHOLITH_FILTER_JSON_DOTKEY_MAX_KEYS", base.json_dotkey_max_keys, _MAX_ENTRIES
         ),
         json_dotkey_max_depth=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_DOTKEY_MAX_DEPTH", base.json_dotkey_max_depth, _MAX_DEPTH
+            "ARCHOLITH_FILTER_JSON_DOTKEY_MAX_DEPTH", base.json_dotkey_max_depth, _MAX_DEPTH
         ),
         json_csv_factor_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_ENABLED", 1 if base.json_csv_factor_enabled else 0, 1
+            "ARCHOLITH_FILTER_JSON_CSV_FACTOR_ENABLED", 1 if base.json_csv_factor_enabled else 0, 1
         ) == 1,
         json_csv_factor_threshold=_env_float(
-            "ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_THRESHOLD",
+            "ARCHOLITH_FILTER_JSON_CSV_FACTOR_THRESHOLD",
             base.json_csv_factor_threshold,
             0.0,
             1.0,
         ),
         json_csv_factor_max_columns=_env_int(
-            "ARCHOLITH_RTK_FILTER_JSON_CSV_FACTOR_MAX_COLS", base.json_csv_factor_max_columns, 10
+            "ARCHOLITH_FILTER_JSON_CSV_FACTOR_MAX_COLS", base.json_csv_factor_max_columns, 10
         ),
         # Stack trace collapsing knobs
         generic_stack_collapse_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_ENABLED",
+            "ARCHOLITH_FILTER_GENERIC_STACK_COLLAPSE_ENABLED",
             1 if base.generic_stack_collapse_enabled else 0,
             1,
         ) == 1,
         generic_stack_collapse_min_frames=_env_int(
-            "ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_MIN_FRAMES",
+            "ARCHOLITH_FILTER_GENERIC_STACK_COLLAPSE_MIN_FRAMES",
             base.generic_stack_collapse_min_frames,
             _MAX_LINE_LINES,
         ),
         generic_stack_collapse_keep_app_frames=_env_int(
-            "ARCHOLITH_RTK_FILTER_GENERIC_STACK_COLLAPSE_KEEP_APP",
+            "ARCHOLITH_FILTER_GENERIC_STACK_COLLAPSE_KEEP_APP",
             base.generic_stack_collapse_keep_app_frames,
             _MAX_LINE_LINES,
         ),
         # Git status prefix grouping knobs
         git_status_group_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_GIT_STATUS_GROUP_ENABLED",
+            "ARCHOLITH_FILTER_GIT_STATUS_GROUP_ENABLED",
             1 if base.git_status_group_enabled else 0,
             1,
         ) == 1,
         git_status_group_max_per_line=_env_int(
-            "ARCHOLITH_RTK_FILTER_GIT_STATUS_GROUP_MAX",
+            "ARCHOLITH_FILTER_GIT_STATUS_GROUP_MAX",
             base.git_status_group_max_per_line,
             _MAX_ENTRIES,
         ),
         # Search heading reformat knob
         search_heading_reformat_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_SEARCH_HEADING_REFORMAT_ENABLED",
+            "ARCHOLITH_FILTER_SEARCH_HEADING_REFORMAT_ENABLED",
             1 if base.search_heading_reformat_enabled else 0,
             1,
         ) == 1,
         # Build task summary knob
         build_summary_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_BUILD_SUMMARY_ENABLED",
+            "ARCHOLITH_FILTER_BUILD_SUMMARY_ENABLED",
             1 if base.build_summary_enabled else 0,
             1,
         ) == 1,
         # ls -la abbreviation knob
         fs_lsl_abbreviate_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_FS_LSL_ABBREVIATE_ENABLED",
+            "ARCHOLITH_FILTER_FS_LSL_ABBREVIATE_ENABLED",
             1 if base.fs_lsl_abbreviate_enabled else 0,
             1,
         ) == 1,
         # ─── Layer 0 knobs ────────────────────────────────────────────
         redact_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_REDACT_ENABLED",
+            "ARCHOLITH_FILTER_REDACT_ENABLED",
             1 if base.redact_enabled else 0,
             1,
         ) == 1,
         strip_thinking_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_STRIP_THINKING_ENABLED",
+            "ARCHOLITH_FILTER_STRIP_THINKING_ENABLED",
             1 if base.strip_thinking_enabled else 0,
             1,
         ) == 1,
         normalize_paths_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_NORMALIZE_PATHS_ENABLED",
+            "ARCHOLITH_FILTER_NORMALIZE_PATHS_ENABLED",
             1 if base.normalize_paths_enabled else 0,
             1,
         ) == 1,
         binary_detection_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_BINARY_DETECTION_ENABLED",
+            "ARCHOLITH_FILTER_BINARY_DETECTION_ENABLED",
             1 if base.binary_detection_enabled else 0,
             1,
         ) == 1,
         oversized_guard_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_OVERSIZED_GUARD_ENABLED",
+            "ARCHOLITH_FILTER_OVERSIZED_GUARD_ENABLED",
             1 if base.oversized_guard_enabled else 0,
             1,
         ) == 1,
         oversized_max_chars=_env_int(
-            "ARCHOLITH_RTK_FILTER_OVERSIZED_MAX_CHARS",
+            "ARCHOLITH_FILTER_OVERSIZED_MAX_CHARS",
             base.oversized_max_chars,
             10_000_000,
         ),
         normalize_noise_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_NORMALIZE_NOISE_ENABLED",
+            "ARCHOLITH_FILTER_NORMALIZE_NOISE_ENABLED",
             1 if base.normalize_noise_enabled else 0,
             1,
         ) == 1,
         table_whitespace_min_enabled=_env_int(
-            "ARCHOLITH_RTK_FILTER_TABLE_WHITESPACE_MIN_ENABLED",
+            "ARCHOLITH_FILTER_TABLE_WHITESPACE_MIN_ENABLED",
             1 if base.table_whitespace_min_enabled else 0,
             1,
         ) == 1,
         read_import_collapse=_env_int(
-            "ARCHOLITH_RTK_FILTER_READ_IMPORTS_COLLAPSE", 1 if base.read_import_collapse else 0, 1
+            "ARCHOLITH_FILTER_READ_IMPORTS_COLLAPSE", 1 if base.read_import_collapse else 0, 1
         ) == 1,
-        read_blank_line_max=_env_int("ARCHOLITH_RTK_FILTER_READ_BLANK_LINE_MAX", base.read_blank_line_max, 10),
+        read_blank_line_max=_env_int("ARCHOLITH_FILTER_READ_BLANK_LINE_MAX", base.read_blank_line_max, 10),
         read_comment_threshold=_env_int(
-            "ARCHOLITH_RTK_FILTER_READ_COMMENT_THRESHOLD", base.read_comment_threshold, 50
+            "ARCHOLITH_FILTER_READ_COMMENT_THRESHOLD", base.read_comment_threshold, 50
         ),
         read_css_rule_collapse=_env_int(
-            "ARCHOLITH_RTK_FILTER_READ_CSS_RULE_COLLAPSE", 1 if base.read_css_rule_collapse else 0, 1
+            "ARCHOLITH_FILTER_READ_CSS_RULE_COLLAPSE", 1 if base.read_css_rule_collapse else 0, 1
         ) == 1,
         read_generated_min_line_len=_env_int(
-            "ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_LINE_LEN", base.read_generated_min_line_len, 5000
+            "ARCHOLITH_FILTER_READ_GENERATED_MIN_LINE_LEN", base.read_generated_min_line_len, 5000
         ),
         read_generated_min_run=_env_int(
-            "ARCHOLITH_RTK_FILTER_READ_GENERATED_MIN_RUN", base.read_generated_min_run, 50
+            "ARCHOLITH_FILTER_READ_GENERATED_MIN_RUN", base.read_generated_min_run, 50
         ),
         read_literal_threshold=_env_int(
-            "ARCHOLITH_RTK_FILTER_READ_LITERAL_THRESHOLD", base.read_literal_threshold, 100
+            "ARCHOLITH_FILTER_READ_LITERAL_THRESHOLD", base.read_literal_threshold, 100
         ),
     )
 
@@ -495,8 +495,8 @@ def boost_for_verbose(cfg: FilterConfig) -> FilterConfig:
 
 
 def is_filter_enabled() -> bool:
-    """Check if filtering is enabled. Env var ARCHOLITH_RTK_FILTERS=off overrides."""
-    env = os.environ.get("ARCHOLITH_RTK_FILTERS", "")
+    """Check if filtering is enabled. Env var ARCHOLITH_FILTERS=off overrides."""
+    env = os.environ.get("ARCHOLITH_FILTERS", "")
     if env.lower() in ("off", "false", "0"):
         return False
     return True
