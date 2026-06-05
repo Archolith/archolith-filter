@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Rename:** package `archolith_rtk` -> `archolith_filter`, distribution `archolith-rtk` -> `archolith-filter`, and the config env-var prefix `ARCHOLITH_FILTER_*` -> `ARCHOLITH_FILTER_*` (master switch `ARCHOLITH_FILTERS` -> `ARCHOLITH_FILTERS`). Aligns with the public brand name. RTK-concept identifiers (`BashRtkExtractor`, etc.) unchanged.
+- **Rename:** package `archolith_rtk` -> `archolith_filter`, distribution `archolith-rtk` -> `archolith-filter`, and the config env-var prefix `ARCHOLITH_RTK_FILTER_*` -> `ARCHOLITH_FILTER_*` (master switch `ARCHOLITH_RTK_FILTERS` -> `ARCHOLITH_FILTERS`). Aligns with the public brand name. RTK-concept identifiers (`BashRtkExtractor`, etc.) unchanged.
 
 - **Layer 0 pre-filter pipeline**: wired `redact_secrets()`, `strip_thinking_blocks()`, and `normalize_paths()` into `filter_output()` with per-stage config gating (env vars `ARCHOLITH_FILTER_*_ENABLED`). Added binary detection (NUL-byte scan, early return), oversized input guard (>500KB head/tail preview, configurable via `ARCHOLITH_FILTER_OVERSIZED_MAX_CHARS`), runtime noise normalization in log/build/test filters (`normalize_runtime_noise()`), and table whitespace minimization in `fs_listing_filter()`. Each stage individually toggleable. Added 9 new config knobs and risk-level presets. (Closes `archolith-filter-layer0-hardening-plan.md`)
 - Added format-switch compression for JSON output: CSV for tabular arrays (Strategy 1), column factoring for dominant values (Strategy 4), key-value lines for flat objects (Strategy 2), and dotted-key lines for nested objects (Strategy 3). Each strategy has safety checks that fall back to truncation when the format-switch output isn't shorter.
