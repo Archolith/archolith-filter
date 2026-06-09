@@ -1,4 +1,4 @@
-"""Tests for ReadFileRtkExtractor — uses RTK's read_file_filter for characterisation."""
+"""Tests for ReadFileFilterExtractor — uses archolith-filter's read_file_filter for characterisation."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import httpx
 import pytest
 
 from archolith_filter.extractors.base import ToolCallRecord
-from archolith_filter.extractors.read_file import ReadFileRtkExtractor
+from archolith_filter.extractors.read_file import ReadFileFilterExtractor
 
 
 @pytest.fixture
 def extractor():
-    return ReadFileRtkExtractor()
+    return ReadFileFilterExtractor()
 
 
 @pytest.fixture
@@ -103,7 +103,7 @@ async def test_empty_result_no_crash(extractor, http_client):
 
 @pytest.mark.asyncio
 async def test_small_file_no_annotation(extractor, http_client):
-    """Small files under RTK filter threshold get plain fact with no annotation."""
+    """Small files under filter threshold get plain fact with no annotation."""
     record = _record("src/tiny.py", "x = 1\n")
     result = await extractor.extract(record, http_client, turn_number=1, session_goal=None)
     assert len(result.facts) == 1

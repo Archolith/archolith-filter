@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""RTK Benchmark: Run filter_output() against real session data.
+"""Filter Benchmark: Run filter_output() against real session data.
 
 Extracts tool results from Claude JSONL, Codex JSONL, and OpenCode SQLite,
 runs archolith_filter.filter_output() on each, and reports actual compression
 ratios per tool, per category, and per size range.
 
 Usage:
-    python rtk_benchmark.py --claude <jsonl> [--claude <more>...]
-    python rtk_benchmark.py --opencode <sqlite>
-    python rtk_benchmark.py --codex <jsonl>
-    python rtk_benchmark.py --all
+    python filter_benchmark.py --claude <jsonl> [--claude <more>...]
+    python filter_benchmark.py --opencode <sqlite>
+    python filter_benchmark.py --codex <jsonl>
+    python filter_benchmark.py --all
 """
 
 import argparse
@@ -27,10 +27,10 @@ from archolith_filter.classifier import CommandCategory
 
 
 # ---------------------------------------------------------------------------
-# Tool name -> RTK dispatch mapping
+# Tool name -> Filter dispatch mapping
 # ---------------------------------------------------------------------------
 
-# Claude tool names -> (tool_name_for_rtk, command_for_rtk)
+# Claude tool names -> (tool_name_for_filter, command_for_filter)
 CLAUDE_TOOL_MAP = {
     "Read": ("read_file", ""),
     "Bash": ("run_command", ""),
@@ -62,8 +62,8 @@ OPENCODE_TOOL_MAP = {
 }
 
 
-def get_rtk_dispatch(source: str, tool_name: str) -> tuple[str, str]:
-    """Return (tool_name_for_rtk, command_for_rtk) based on source and tool."""
+def get_filter_dispatch(source: str, tool_name: str) -> tuple[str, str]:
+    """Return (tool_name_for_filter, command_for_filter) based on source and tool."""
     if source == "claude":
         return CLAUDE_TOOL_MAP.get(tool_name, (tool_name, ""))
     elif source == "codex":
@@ -253,7 +253,7 @@ def run_benchmark(tool_results, source: str, config: FilterConfig = None, max_re
     items = tool_results if max_results is None else tool_results[:max_results]
 
     for tool_name, text in items:
-        rtk_tool, rtk_command = get_rtk_dispatch(source, tool_name)
+        filter_tool, filter_command = get_filter_dispatch(source, tool_name)
         raw_chars = len(text)
 
         # Size bucket
@@ -275,8 +275,8 @@ def run_benchmark(tool_results, source: str, config: FilterConfig = None, max_re
         try:
             result = filter_output(
                 text,
-                tool=rtk_tool,
-                command=rtk_command,
+                tool=filter_tool,
+                command=filter_command,
                 exit_code=0,
                 config=config,
             )
@@ -317,7 +317,7 @@ def run_benchmark(tool_results, source: str, config: FilterConfig = None, max_re
 def print_benchmark_report(source_name, tool_stats, category_stats, size_savings):
     """Print a formatted benchmark report."""
     print(f"\n{'='*100}")
-    print(f"RTK BENCHMARK: {source_name}")
+    print(f"FILTER BENCHMARK: {source_name}")
     print(f"{'='*100}")
 
     # Sort tools by total raw chars
@@ -378,7 +378,7 @@ def print_benchmark_report(source_name, tool_stats, category_stats, size_savings
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="RTK benchmark against real session data")
+    parser = argparse.ArgumentParser(description="Filter benchmark against real session data")
     parser.add_argument("--claude", nargs="*", help="Claude JSONL session files")
     parser.add_argument("--codex", nargs="*", help="Codex JSONL session files")
     parser.add_argument("--opencode", help="OpenCode SQLite database path")

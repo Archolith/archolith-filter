@@ -34,8 +34,8 @@ context = ["archolith-proxy>=0.1.0"]
 dev = ["pytest>=8", "pytest-benchmark>=5", "pytest-cov>=5", "ruff>=0.5"]
 
 [project.entry-points."archolith.tool_extractors"]
-bash_rtk = "archolith_filter.extractors.bash:BashRtkExtractor"
-read_file_rtk = "archolith_filter.extractors.read_file:ReadFileRtkExtractor"
+bash_filter = "archolith_filter.extractors.bash:BashFilterExtractor"
+read_file_filter = "archolith_filter.extractors.read_file:ReadFileFilterExtractor"
 
 [tool.hatch.build.targets.wheel]
 packages = ["archolith_filter"]

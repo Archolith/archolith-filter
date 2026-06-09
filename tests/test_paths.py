@@ -63,11 +63,11 @@ class TestPathNormalization:
                 "C:/Users/thron/IdeaProjects/projects/archolith/archolith-context",
             ],
         )
-        text_rtk = "C:/Users/thron/IdeaProjects/projects/archolith/archolith-filter/src/main.py"
+        text_filter = "C:/Users/thron/IdeaProjects/projects/archolith/archolith-filter/src/main.py"
         text_ctx = "C:/Users/thron/IdeaProjects/projects/archolith/archolith-context/src/main.py"
-        result_rtk = normalize_paths(text_rtk, config=config)
+        result_filter = normalize_paths(text_filter, config=config)
         result_ctx = normalize_paths(text_ctx, config=config)
-        assert "archolith-filter/src/main.py" in result_rtk
+        assert "archolith-filter/src/main.py" in result_filter
         assert "archolith-context/src/main.py" in result_ctx
 
     def test_longest_root_prefix_wins(self):
@@ -90,7 +90,7 @@ class TestPathNormalization:
         assert result == ""
 
     def test_off_switch(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_STRIP_WORKSPACE_ROOT", "off")
+        monkeypatch.setenv("ARCHOLITH_FILTER_STRIP_WORKSPACE_ROOT", "off")
         config = PathConfig(
             workspace_root="C:/Users/thron/IdeaProjects",
             project_roots=["C:/Users/thron/IdeaProjects/projects/myapp"],
@@ -98,6 +98,20 @@ class TestPathNormalization:
         text = "C:/Users/thron/IdeaProjects/projects/myapp/src/main.py"
         result = normalize_paths(text, config=config)
         # Feature disabled — text unchanged.
+        assert result == text
+
+    def test_off_switch_backward_compat(self, monkeypatch):
+        """Verify backward compat: old RTK env var name still works."""
+        # Clear the new env var so we test the fallback.
+        monkeypatch.delenv("ARCHOLITH_FILTER_STRIP_WORKSPACE_ROOT", raising=False)
+        monkeypatch.setenv("ARCHOLITH_RTK_STRIP_WORKSPACE_ROOT", "off")
+        config = PathConfig(
+            workspace_root="C:/Users/thron/IdeaProjects",
+            project_roots=["C:/Users/thron/IdeaProjects/projects/myapp"],
+        )
+        text = "C:/Users/thron/IdeaProjects/projects/myapp/src/main.py"
+        result = normalize_paths(text, config=config)
+        # Old env var should disable the feature.
         assert result == text
 
     def test_config_reset(self):

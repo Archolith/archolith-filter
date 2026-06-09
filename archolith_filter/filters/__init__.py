@@ -13,3 +13,6 @@ class FilterResult:
     raw_chars: int
     filtered_chars: int
     truncated: bool
+
+
+__all__ = ["FilterResult"]

@@ -1,4 +1,4 @@
-"""Tests for BashRtkExtractor — uses RTK's classifier for routing."""
+"""Tests for BashFilterExtractor — uses archolith-filter's classifier for routing."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import httpx
 import pytest
 
 from archolith_filter.extractors.base import ToolCallRecord
-from archolith_filter.extractors.bash import BashRtkExtractor
+from archolith_filter.extractors.bash import BashFilterExtractor
 
 
 @pytest.fixture
 def extractor():
-    return BashRtkExtractor()
+    return BashFilterExtractor()
 
 
 @pytest.fixture
@@ -107,13 +107,13 @@ async def test_ansi_stripped_before_classification(extractor, http_client):
 
 
 def test_tool_names_declared():
-    """BashRtkExtractor declares tool_names for Bash and run_command."""
-    ext = BashRtkExtractor()
+    """BashFilterExtractor declares tool_names for Bash and run_command."""
+    ext = BashFilterExtractor()
     assert "Bash" in ext.tool_names
     assert "run_command" in ext.tool_names
 
 
 def test_may_use_llm_false():
-    """BashRtkExtractor never uses LLM."""
-    ext = BashRtkExtractor()
+    """BashFilterExtractor never uses LLM."""
+    ext = BashFilterExtractor()
     assert ext.may_use_llm is False

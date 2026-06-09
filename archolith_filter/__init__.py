@@ -1,6 +1,5 @@
-"""Archolith RTK — Token Reduction Toolkit.
+"""Archolith Filter — Deterministic output filtering for LLM agent contexts.
 
-Deterministic output filtering for LLM agent contexts.
 Two layers: output filters and shrink.
 
 Public API:

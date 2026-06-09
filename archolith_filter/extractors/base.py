@@ -1,4 +1,4 @@
-"""Conditional import guard + RtkExtractorBase.
+"""Conditional import guard + FilterExtractorBase.
 
 If archolith-context is installed, the real ToolExtractor ABC is used.
 Otherwise, duck-typed stubs from _stubs.py are loaded so the module
@@ -25,13 +25,16 @@ except ImportError:
     _CONTEXT_AVAILABLE = False
 
 
-class RtkExtractorBase(ToolExtractor):
-    """Base class for all RTK-enhanced extractors.
+class FilterExtractorBase(ToolExtractor):
+    """Base class for all filter-enhanced extractors.
 
     Adds no new abstract methods — it's a marker class for registry
-    discovery. All RTK extractors inherit from this to get a common
-    ancestry that distinguishes them from built-in archolith-context
-    extractors.
+    discovery. All filter extractors inherit from this to get a common
+    ancestry that distinguishes them from archolith-context built-ins.
     """
 
     pass
+
+
+# Backward compat: deprecated alias for FilterExtractorBase
+RtkExtractorBase = FilterExtractorBase

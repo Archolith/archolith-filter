@@ -1,4 +1,4 @@
-"""ReadFileRtkExtractor — RTK-enhanced Read file extractor.
+"""ReadFileFilterExtractor — Filter-enhanced Read file extractor.
 
 Uses archolith-filter's ``read_file_filter()`` to detect structural
 characteristics (import-heavy, generated, CSS) and surfaces them as
@@ -11,7 +11,7 @@ import httpx
 
 from archolith_filter.extractors.base import (
     PartialExtractionResult,
-    RtkExtractorBase,
+    FilterExtractorBase,
     ToolCallRecord,
 )
 
@@ -24,8 +24,8 @@ def _extract_path(args: dict) -> str:
     )
 
 
-class ReadFileRtkExtractor(RtkExtractorBase):
-    """Read extractor that uses RTK's read_file_filter for structural characterisation.
+class ReadFileFilterExtractor(FilterExtractorBase):
+    """Read extractor that uses archolith-filter's read_file_filter for structural characterisation.
 
     When the filter detects import-heavy content, generated files, or CSS
     rules, the fact includes that annotation. Normal files get a plain
@@ -68,7 +68,7 @@ class ReadFileRtkExtractor(RtkExtractorBase):
         )
 
     def _detect_annotations(self, content: str) -> list[str]:
-        """Run RTK's read_file_filter to detect structural characteristics."""
+        """Run archolith-filter's read_file_filter to detect structural characteristics."""
         from archolith_filter.filters.read_file import ReadFileFilterOptions, read_file_filter
 
         if not content.strip():
@@ -98,3 +98,7 @@ class ReadFileRtkExtractor(RtkExtractorBase):
             annotations.append("comment-heavy")
 
         return annotations
+
+
+# Backward compat: deprecated alias for ReadFileFilterExtractor
+ReadFileRtkExtractor = ReadFileFilterExtractor

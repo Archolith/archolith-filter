@@ -9,7 +9,7 @@ Multi-project handling:
     → ``archolith-filter/archolith_filter/filters/json_output.py``
 
 Root detection strategies (priority order):
-    1. ``ARCHOLITH_RTK_WORKSPACE_ROOT`` env var
+    1. ``ARCHOLITH_FILTER_WORKSPACE_ROOT`` env var (or ``ARCHOLITH_RTK_WORKSPACE_ROOT`` for backward compatibility)
     2. Git-based: walk up from CWD to find ``.git`` directory
     3. Common-prefix inference from all paths in current output (fallback)
 """
@@ -55,8 +55,12 @@ _CANDIDATE_ROOTS = [
 
 def _find_workspace_root() -> str:
     """Detect workspace root via env var or git walk."""
-    # 1. Explicit env var.
-    env_root = os.environ.get("ARCHOLITH_RTK_WORKSPACE_ROOT", "")
+    # 1. Explicit env var (prefer new ARCHOLITH_FILTER_* name, fall back to RTK name).
+    env_root = (
+        os.environ.get("ARCHOLITH_FILTER_WORKSPACE_ROOT")
+        or os.environ.get("ARCHOLITH_RTK_WORKSPACE_ROOT")
+        or ""
+    )
     if env_root and os.path.isdir(env_root):
         return env_root
 
@@ -138,12 +142,17 @@ def normalize_paths(text: str, config: PathConfig | None = None) -> str:
       (e.g., ``projects/archolith/archolith-filter/...`` → ``archolith-filter/...``).
     - Normalizes ``\\`` to ``/``.
     - Only normalizes paths that match a known root prefix.
-    - Off-switch: ``ARCHOLITH_RTK_STRIP_WORKSPACE_ROOT=off`` disables this.
+    - Off-switch: ``ARCHOLITH_FILTER_STRIP_WORKSPACE_ROOT=off`` disables this.
     """
     # Off-switch check (standalone safety valve for direct callers).
-    # When called through the RTK pipeline (filter_output), the primary
+    # When called through the filter pipeline (filter_output), the primary
     # gate is ARCHOLITH_FILTER_NORMALIZE_PATHS_ENABLED in FilterConfig.
-    off = os.environ.get("ARCHOLITH_RTK_STRIP_WORKSPACE_ROOT", "")
+    # Check new name first, fall back to old RTK name for backward compatibility.
+    off = (
+        os.environ.get("ARCHOLITH_FILTER_STRIP_WORKSPACE_ROOT")
+        or os.environ.get("ARCHOLITH_RTK_STRIP_WORKSPACE_ROOT")
+        or ""
+    )
     if off.lower() in ("off", "false", "0"):
         return text
 

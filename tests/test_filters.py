@@ -12,8 +12,8 @@ from archolith_filter.config import (
     from_env,
     is_verbose_command,
 )
-from archolith_filter.dedupe import reset_dedupe_tracker
 from archolith_filter.filter_meta import parse_result_meta
+from archolith_filter.filters import FilterResult
 from archolith_filter.filters.build_output import BuildFilterOptions, build_filter
 from archolith_filter.filters.fs_listing import FsListingFilterOptions, fs_listing_filter
 from archolith_filter.filters.generic import GenericFilterOptions, generic_filter
@@ -28,21 +28,9 @@ from archolith_filter.filters.read_file import ReadFileFilterOptions, read_file_
 from archolith_filter.filters.search import SearchFilterOptions, search_filter
 from archolith_filter.filters.test_run_output import filter_test_output
 from archolith_filter.filters.typecheck_output import typecheck_filter
-from archolith_filter.raw_store import RawOutputStore, get_raw_output_store, reset_raw_output_store
+from archolith_filter.raw_store import RawOutputStore, get_raw_output_store
 from archolith_filter.strip_ansi import strip_ansi
-from archolith_filter.telemetry import get_filter_telemetry_store, reset_filter_telemetry_store
-
-
-@pytest.fixture(autouse=True)
-def _reset_stores():
-    """Reset singleton stores between tests."""
-    reset_raw_output_store()
-    reset_filter_telemetry_store()
-    reset_dedupe_tracker()
-    yield
-    reset_raw_output_store()
-    reset_filter_telemetry_store()
-    reset_dedupe_tracker()
+from archolith_filter.telemetry import get_filter_telemetry_store
 
 
 # ─── strip_ansi ───
@@ -340,8 +328,11 @@ class TestJsonFilter:
 
     def test_invalid_json_falls_to_generic(self):
         text = "$ some-cmd\n[exit 0]\nnot valid json at all\n" + "line\n" * 100
-        json_filter(text)
+        r = json_filter(text)
         # Should not crash — falls through to generic
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── search filter ───
@@ -464,8 +455,11 @@ class TestFsListingFilter:
 class TestSimpleFilters:
     def test_test_filter_delegates(self):
         text = "$ pytest\n[exit 0]\n" + "\n".join(f"test_{i} PASSED" for i in range(100))
-        filter_test_output(text)
+        r = filter_test_output(text)
         # Should not crash — delegates to generic with test defaults
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_build_filter_delegates(self):
         text = "$ gradle build\n[exit 0]\n" + "compiling...\n" * 100
@@ -975,6 +969,9 @@ class TestCsvStrategy:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
         # Only 2 items, below min_rows=3 — should fall back
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_mixed_keys_still_tabular(self):
         """Sparse objects with optional keys are still tabular if 60% overlap."""
@@ -990,6 +987,9 @@ class TestCsvStrategy:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
         # Nested dicts don't qualify for CSV
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_csv_row_limit(self):
         data = [{"id": i, "name": f"item_{i}"} for i in range(50)]
@@ -1026,12 +1026,18 @@ class TestKvStrategy:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(kv_enabled=True, kv_min_keys=3))
         # Only 2 keys, below min_keys — should fall back
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_nested_values_skip_kv(self):
         data = {"name": "test", "config": {"nested": True}, "count": 5}
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(kv_enabled=True, kv_min_keys=3))
         # Nested dict should use dotted-key, not KV
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_key_limit(self):
         data = {f"key_{i}": f"value_{i}" for i in range(30)}
@@ -1055,12 +1061,18 @@ class TestDotkeyStrategy:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(dotkey_enabled=True, dotkey_max_depth=3))
         # Depth 4 exceeds max_depth of 3
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_arrays_in_values_skip_dotkey(self):
         data = {"items": [1, 2, 3], "name": "test"}
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(dotkey_enabled=True))
         # Arrays are not dottable — falls back
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 5: Stack trace collapsing ───
@@ -1092,6 +1104,9 @@ class TestStackTraceCollapse:
         # Only 3 frames, below min_frames=5
         r = generic_filter(text, GenericFilterOptions(stack_collapse_enabled=True, stack_collapse_min_frames=5))
         # Should not collapse — below min_frames threshold
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 6: Git status grouping ───
@@ -1118,11 +1133,17 @@ class TestGitStatusGrouping:
         text = "$ git status -s\n[exit 0]\n" + "\n".join(lines)
         r = git_status_filter(text, GitStatusFilterOptions(group_enabled=False))
         # Should fall through to generic filter
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_non_short_format_skips_grouping(self):
         text = "$ git status\n[exit 0]\nOn branch main\nChanges to be committed:\n  modified: foo.ts"
         r = git_status_filter(text, GitStatusFilterOptions(group_enabled=True))
         # Long-format should fall through to generic
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 7: Search heading reformat ───
@@ -1144,6 +1165,9 @@ class TestSearchHeadingReformat:
         text = "$ rg --heading pattern\nsrc/auth/handler.ts:\n5:pattern match\n6:another match"
         r = search_filter(text, SearchFilterOptions(heading_reformat_enabled=True))
         # Already heading-style — should not double-convert
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 8: Build task summary ───
@@ -1178,6 +1202,9 @@ class TestBuildSummary:
         # Non-zero exit — filter_output bypasses
         r = filter_output(text, command="gradle build", exit_code=1)
         # Should not summarize failed builds
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_summary_disabled(self):
         lines = [
@@ -1189,6 +1216,9 @@ class TestBuildSummary:
         text = "$ gradle build\n[exit 0]\n" + "\n".join(lines)
         r = build_filter(text, BuildFilterOptions(summary_enabled=False))
         # Falls back to generic — should still work
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 9: ls -la abbreviation ───
@@ -1286,6 +1316,9 @@ class TestCsvEdgeCases:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
         # Should fall through since min_rows=3 not met
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 class TestDotkeyEdgeCases:

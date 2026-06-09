@@ -1,4 +1,4 @@
-"""BashRtkExtractor — RTK-enhanced Bash command extractor.
+"""BashFilterExtractor — Filter-enhanced Bash command extractor.
 
 Uses archolith-filter's ``classify_command()`` as the single source of truth
 for routing, then applies category-specific regex extraction. No LLM calls
@@ -15,7 +15,7 @@ import httpx
 from archolith_filter.classifier import classify_command
 from archolith_filter.extractors.base import (
     PartialExtractionResult,
-    RtkExtractorBase,
+    FilterExtractorBase,
     ToolCallRecord,
 )
 from archolith_filter.strip_ansi import strip_ansi
@@ -34,12 +34,12 @@ _GIT_LOG_RE = re.compile(r"^([0-9a-f]{7,}) (.+)", re.MULTILINE)
 _ERROR_RE = re.compile(r"(?:error|Error|ERROR):?\s+(.{0,120})")
 
 
-class BashRtkExtractor(RtkExtractorBase):
-    """Bash extractor that uses RTK's classifier for routing.
+class BashFilterExtractor(FilterExtractorBase):
+    """Bash extractor that uses archolith-filter's classifier for routing.
 
     Key difference from the built-in BashExtractor: uses
     ``classify_command()`` as the single source of truth, so when
-    RTK adds a new category, routing here picks it up automatically.
+    archolith-filter adds a new category, routing here picks it up automatically.
     """
 
     tool_names = ("Bash", "run_command")
@@ -195,3 +195,7 @@ class BashRtkExtractor(RtkExtractorBase):
             "fact_type": "tool_result",
             "confidence": 0.6,
         }]
+
+
+# Backward compat: deprecated alias for BashFilterExtractor
+BashRtkExtractor = BashFilterExtractor
