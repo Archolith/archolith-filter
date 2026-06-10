@@ -8,8 +8,11 @@ A. **Shrink** — cap every tool-role message to an approximate token
    fuzzy — actual token count may be 10-20% above or below the nominal
    ``shrink_max_tokens`` value.  No tiktoken overhead.
 
-B. **Dedup** — replace byte-identical tool results with compact markers
-   using a caller-provided ``DedupeTracker``.
+B. **Dedup** — replace byte-identical tool results within a single payload
+   with compact markers, using payload-scoped keep-newest semantics.
+   Dedup state does NOT persist across requests; each payload is
+   self-contained. This prevents re-sent history from being incorrectly
+   markered in subsequent requests.
 
 C. **Filter middle** — apply ``filter_output()`` to compressible tool
    results in the historical (middle) section while shrinking the
@@ -26,12 +29,9 @@ returned unchanged.
 Usage::
 
     from archolith_filter.agent_solo import compress_agent_solo_turn, AgentSoloResult
-    from archolith_filter.dedupe import DedupeTracker
 
-    tracker = DedupeTracker()  # one per session
     result = compress_agent_solo_turn(
         messages,
-        dedup_tracker=tracker,
         shrink_enabled=True,
         dedup_enabled=True,
         filter_middle_enabled=True,
@@ -176,42 +176,79 @@ _DEDUP_MIN_CHARS = 200
 
 def _apply_dedup(
     messages: list[dict[str, Any]],
-    tracker: DedupeTracker,
+    *,
+    tail_start_index: int | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Replace byte-identical tool results with compact markers.
+    """Replace byte-identical tool results within this payload with markers.
 
-    Uses the caller-provided ``DedupeTracker`` so that dedup state is
-    scoped per-session (the caller creates one tracker per session and
-    reuses it across turns).
+    **Payload-scoped keep-newest semantics:** Only detects and dedupes
+    content within the current payload. Dedup state does NOT persist
+    across requests. This prevents re-sent history from being incorrectly
+    markered in subsequent API requests.
+
+    When the same content appears multiple times in this payload:
+    - The NEWEST (last) occurrence is kept intact.
+    - All EARLIER occurrences are replaced with a forward-pointing marker.
+
+    Args:
+        messages: OpenAI-format message list for this payload.
+        tail_start_index: If provided, messages from this index onward
+            (the coherence tail) are NEVER replaced, though their content
+            is still SEEN for dedup detection of earlier messages.
+            This preserves tail integrity for model coherence.
 
     Returns (processed_messages, chars_saved).
     """
-    result: list[dict[str, Any]] = []
-    chars_saved = 0
+    import hashlib
 
-    for msg in messages:
+    # Build hash → [list of indices] for all tool messages in payload
+    hash_to_indices: dict[str, list[int]] = {}
+
+    for idx, msg in enumerate(messages):
         if msg.get("role") != "tool":
-            result.append(msg)
             continue
 
         content = msg.get("content")
         if not isinstance(content, str) or len(content) < _DEDUP_MIN_CHARS:
-            result.append(msg)
             continue
 
-        hit = tracker.check(content)
-        if hit is not None:
-            # Already seen — replace with compact marker
-            occurrence = tracker.record(content)
-            marker = (
-                f"[identical to prior result, occurrence {occurrence}"
-                f" -- {len(content):,} chars omitted]"
-            )
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        if content_hash not in hash_to_indices:
+            hash_to_indices[content_hash] = []
+        hash_to_indices[content_hash].append(idx)
+
+    # Determine which indices can be replaced (not in tail)
+    tail_start = tail_start_index if tail_start_index is not None else len(messages)
+
+    # Track which indices should be replaced
+    indices_to_replace: dict[int, str] = {}  # idx → marker text
+
+    for content_hash, indices in hash_to_indices.items():
+        if len(indices) <= 1:
+            # Single occurrence — never replace
+            continue
+
+        # Multiple occurrences: keep the LAST, replace earlier ones
+        # (unless they're in the tail).
+        last_idx = indices[-1]
+        for earlier_idx in indices[:-1]:
+            if earlier_idx < tail_start:
+                # Safe to replace: it's in the middle section
+                content_len = len(messages[earlier_idx]["content"])
+                marker = f"[superseded by identical re-read below — {content_len:,} chars omitted]"
+                indices_to_replace[earlier_idx] = marker
+
+    # Apply replacements
+    result: list[dict[str, Any]] = []
+    chars_saved = 0
+
+    for idx, msg in enumerate(messages):
+        if idx in indices_to_replace:
+            marker = indices_to_replace[idx]
+            original_content = msg.get("content", "")
             result.append({**msg, "content": marker})
-            chars_saved += len(content) - len(marker)
+            chars_saved += len(original_content) - len(marker)
         else:
-            # First time — record hash and pass through
-            tracker.record(content)
             result.append(msg)
 
     return result, chars_saved
@@ -492,15 +529,16 @@ def compress_agent_solo_turn(
     Strategies are applied in order D -> C -> B -> A so that:
     - Tool arg compaction runs first (removes dead-weight file content)
     - Middle compression runs next (structural reduction)
-    - Dedup runs on the structurally compressed output
+    - Dedup runs on the structurally compressed output (payload-scoped)
     - Shrink runs last as a catch-all cap
 
     Args:
         messages: OpenAI-format message list (list of dicts).
-        dedup_tracker: Session-scoped DedupeTracker.  Required when
-            ``dedup_enabled`` is True.
+        dedup_tracker: Deprecated — kept for backward compatibility but
+            no longer used. Dedup is now payload-scoped and does not
+            persist across requests.
         shrink_enabled: Enable Strategy A (token-budget all tool results).
-        dedup_enabled: Enable Strategy B (cross-turn content dedup).
+        dedup_enabled: Enable Strategy B (payload-scoped keep-newest dedup).
         filter_middle_enabled: Enable Strategy C (filter middle, shrink tail).
         compact_tool_args_enabled: Enable Strategy D (compact completed
             Write/Edit tool_use arguments).  Default True — essentially
@@ -534,6 +572,14 @@ def compress_agent_solo_turn(
         except Exception:
             pass  # fail-open
 
+    # Compute tail boundary for Strategy C and B to share
+    tail_start_index: int | None = None
+    if filter_middle_enabled or dedup_enabled:
+        # Determine which messages form the tail for both strategies
+        system, middle, tail = _split_sections(result, coherence_tail_size)
+        if middle:
+            tail_start_index = len(system) + len(middle)
+
     # Strategy C — filter middle section + shrink tail
     if filter_middle_enabled:
         try:
@@ -548,10 +594,11 @@ def compress_agent_solo_turn(
         except Exception:
             pass  # fail-open
 
-    # Strategy B — dedup (before shrink so markers stay compact)
-    if dedup_enabled and dedup_tracker is not None:
+    # Strategy B — dedup payload-scoped with tail guard
+    # (before shrink so markers stay compact)
+    if dedup_enabled:
         try:
-            result, saved = _apply_dedup(result, dedup_tracker)
+            result, saved = _apply_dedup(result, tail_start_index=tail_start_index)
             stats.chars_saved_dedup = saved
             if saved > 0:
                 stats.strategies_applied.append("dedup")

@@ -118,42 +118,103 @@ class TestShrinkStrategy:
 
 
 class TestDedupStrategy:
-    def test_dedup_replaces_repeated_content(self):
+    def test_payload_scoped_keep_newest_two_occurrences(self):
+        """Two identical >=200-char tool contents in same payload.
+        Earlier should be markered, later should be intact, chars_saved correct."""
         content = "a" * 500
-        tracker = DedupeTracker()
+        messages = [
+            _user_msg(),
+            _tool_msg(content, name="bash"),
+            _user_msg(),
+            _tool_msg(content, name="bash"),  # identical, later occurrence
+        ]
+        result = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert result.stats.chars_saved_dedup > 0
+        assert "dedup" in result.stats.strategies_applied
+        # Earlier (index 1) should be markered
+        assert "superseded" in result.messages[1]["content"].lower()
+        # Later (index 3) should be intact
+        assert result.messages[3]["content"] == content
 
-        # First turn — records hashes
-        msgs1 = [_user_msg(), _tool_msg(content)]
-        r1 = compress_agent_solo_turn(
-            msgs1, dedup_tracker=tracker, dedup_enabled=True,
-        )
-        assert r1.stats.chars_saved_dedup == 0  # first time, no savings
+    def test_payload_scoped_keep_newest_three_occurrences(self):
+        """Three identical contents: first two markered, newest intact."""
+        content = "b" * 500
+        messages = [
+            _tool_msg(content),
+            _user_msg(),
+            _tool_msg(content),
+            _user_msg(),
+            _tool_msg(content),  # newest
+        ]
+        result = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert result.stats.chars_saved_dedup > 0
+        # Indices 0 and 2 markered, index 4 intact
+        assert "superseded" in result.messages[0]["content"].lower()
+        assert "superseded" in result.messages[2]["content"].lower()
+        assert result.messages[4]["content"] == content
 
-        # Second turn — same content should be deduped
-        msgs2 = [_user_msg(), _tool_msg(content)]
-        r2 = compress_agent_solo_turn(
-            msgs2, dedup_tracker=tracker, dedup_enabled=True,
+    def test_tail_guard_newest_in_tail(self):
+        """Newest occurrence is in tail — middle should still be markered."""
+        content = "c" * 500
+        messages = [
+            _system_msg(),
+            _user_msg(), _assistant_msg(),
+            _tool_msg(content, name="bash"),  # middle
+            _user_msg(), _assistant_msg(),
+            _tool_msg(content),  # in tail (last 3 messages)
+        ]
+        result = compress_agent_solo_turn(
+            messages,
+            dedup_enabled=True,
+            coherence_tail_size=3,
         )
-        assert r2.stats.chars_saved_dedup > 0
-        assert "dedup" in r2.stats.strategies_applied
-        assert "identical" in r2.messages[1]["content"].lower()
+        # Middle copy (index 3) should be markered because newest is in tail
+        assert "superseded" in result.messages[3]["content"].lower()
+        # Tail copy (index 6) should be intact
+        assert result.messages[6]["content"] == content
+
+    def test_cross_request_regression_no_remarket(self):
+        """Single occurrence in a payload should NEVER be markered.
+        Regression test for doom-loop: same payload re-sent in next request
+        was getting markered on second call with shared tracker."""
+        content = "d" * 500
+        messages = [_user_msg(), _tool_msg(content)]
+
+        # First call — single occurrence, no marking
+        r1 = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert r1.stats.chars_saved_dedup == 0
+        assert r1.messages[1]["content"] == content
+
+        # Second call — SAME payload re-sent. With payload-scoped dedup,
+        # still single occurrence in THIS payload, should not be markered.
+        r2 = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert r2.stats.chars_saved_dedup == 0
+        assert r2.messages[1]["content"] == content
 
     def test_dedup_skips_small_content(self):
-        tracker = DedupeTracker()
-        messages = [_user_msg(), _tool_msg("tiny")]
-        # First pass
-        compress_agent_solo_turn(messages, dedup_tracker=tracker, dedup_enabled=True)
-        # Second pass
-        r = compress_agent_solo_turn(messages, dedup_tracker=tracker, dedup_enabled=True)
-        assert r.stats.chars_saved_dedup == 0  # too small to dedup
+        """Content below 200 chars is never deduped."""
+        messages = [
+            _user_msg(),
+            _tool_msg("tiny"),
+            _user_msg(),
+            _tool_msg("tiny"),  # identical but <200 chars
+        ]
+        result = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert result.stats.chars_saved_dedup == 0
+        # Both should be unchanged
+        assert result.messages[1]["content"] == "tiny"
+        assert result.messages[3]["content"] == "tiny"
 
     def test_dedup_different_content_not_replaced(self):
-        tracker = DedupeTracker()
-        msgs1 = [_user_msg(), _tool_msg("a" * 500)]
-        compress_agent_solo_turn(msgs1, dedup_tracker=tracker, dedup_enabled=True)
-        msgs2 = [_user_msg(), _tool_msg("b" * 500)]
-        r = compress_agent_solo_turn(msgs2, dedup_tracker=tracker, dedup_enabled=True)
-        assert r.stats.chars_saved_dedup == 0
+        """Different content is never markered."""
+        messages = [
+            _user_msg(),
+            _tool_msg("a" * 500),
+            _user_msg(),
+            _tool_msg("b" * 500),
+        ]
+        result = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert result.stats.chars_saved_dedup == 0
 
 
 # ─── Strategy C: Filter middle ───
