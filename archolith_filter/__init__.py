@@ -295,6 +295,7 @@ def filter_output(
     exit_code: int | None = None,
     timed_out: bool = False,
     config: FilterConfig | None = None,
+    dedupe_tracker: DedupeTracker | None = None,
 ) -> FilterResult:
     """Layer 1: Filter a tool result before it enters model context.
 
@@ -317,6 +318,12 @@ def filter_output(
         exit_code: Process exit code (None if unknown). Non-zero exits bypass filtering.
         timed_out: Whether the command was killed after timeout.
         config: Optional FilterConfig override. Defaults to env-var config.
+        dedupe_tracker: Optional DedupeTracker for Stage 7 (cross-turn dedupe).
+            When provided, this tracker is used instead of the process-global
+            singleton. Use a fresh tracker per request batch for payload-replay
+            semantics (re-sent history is never markered). Omit or pass None
+            to use the persistent process-global singleton for live-stream
+            semantics (genuine new outputs are deduped across calls).
 
     Returns:
         FilterResult with compressed output, char counts, and truncation flag.
@@ -400,7 +407,8 @@ def filter_output(
         stripped = normalize_paths(stripped)
 
     # Stage 7: Cross-turn dedupe — check for exact repeats.
-    dedupe = get_dedupe_tracker()
+    # Use caller-provided tracker if present; otherwise use process-global singleton.
+    dedupe = dedupe_tracker if dedupe_tracker is not None else get_dedupe_tracker()
     dedupe_hit = dedupe.check(stripped)
     if dedupe_hit is not None:
         occurrence = dedupe.record(stripped)

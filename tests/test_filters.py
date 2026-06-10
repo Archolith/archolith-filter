@@ -1401,3 +1401,41 @@ class TestBuildEdgeCases:
         text = "$ gradle build\n[exit 0]\n" + "\n".join(lines)
         r = build_filter(text, BuildFilterOptions(summary_enabled=True))
         assert "warning" in r.output.lower()
+
+
+# ─── filter_output dedupe_tracker parameter ───
+
+
+class TestFilterOutputDedupTracker:
+    def test_fresh_tracker_per_call_no_cross_request_marking(self):
+        """With a fresh tracker per call, same string on two calls is not markered."""
+        from archolith_filter.dedupe import DedupeTracker
+
+        content = "x" * 1000  # large enough to trigger dedupe (>= 500 chars for filter)
+
+        # First call with fresh tracker
+        r1 = filter_output(content, tool="bash", dedupe_tracker=DedupeTracker())
+        assert "repeated" not in r1.output.lower()
+
+        # Second call with ANOTHER fresh tracker
+        # (same content, but tracker doesn't know about first call)
+        r2 = filter_output(content, tool="bash", dedupe_tracker=DedupeTracker())
+        assert "repeated" not in r2.output.lower()
+
+    def test_shared_tracker_cross_call_marking(self):
+        """With a persistent/shared tracker, second identical call IS markered."""
+        from archolith_filter.dedupe import DedupeTracker, reset_dedupe_tracker
+
+        content = "y" * 1000
+        shared_tracker = DedupeTracker()
+
+        # Reset global tracker to ensure clean state
+        reset_dedupe_tracker()
+
+        # First call with shared tracker
+        r1 = filter_output(content, tool="bash", dedupe_tracker=shared_tracker)
+        assert "repeated" not in r1.output.lower()
+
+        # Second call with SAME shared tracker
+        r2 = filter_output(content, tool="bash", dedupe_tracker=shared_tracker)
+        assert "repeated" in r2.output.lower()
