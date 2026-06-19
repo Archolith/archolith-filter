@@ -4,6 +4,17 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-06-19 — Audit remediation (High tier)
+
+Closed the surviving High findings from the 2026-06-07 chunk audits (re-verified against current code; 2 of 7 were already remediated).
+
+- **fix(logs):** log header extraction now uses `generic._extract_header`, fixing `[exit N]`/`[killed]` headers previously treated as body (chunk6 H-2).
+- **fix(redact):** connection-string redaction targets only the `user:pass` credential, preserving scheme/host/database/query for diagnostics; handles empty-username form (chunk8 H1).
+- **refactor(_patterns):** added shared `LINE_COMMENT_RE` / `is_line_comment()`; `read_file.py` no longer shadows it locally (chunk6 H-1).
+- **refactor(shrink):** extracted `_collapse_imports_and_comments()` shared by char/token read_file truncators, removing duplicated logic (chunk7 F-04).
+- **Deferred:** chunk6 H-3 (json_output perf) — the audit's minified-JSON lower-bound heuristic is unsound because `_compress_value` truncates long strings and can be shorter than minified JSON; deferred pending a sound approach. All Medium/Low findings deferred per launch posture.
+- **Verification:** `pytest` 341 passed / 1 skipped; `ruff check` clean on touched files.
+
 ## 2026-06-02 — Layer 0 pre-filter pipeline wiring
 
 - **Layer 0 pipeline**: Wired `redact_secrets()`, `strip_thinking_blocks()`, and `normalize_paths()` into `filter_output()` with per-stage config gating. Added binary detection (NUL-byte scan, early return at <10% text ratio), oversized input guard (500KB default threshold, head/tail preview), and table whitespace minimization in `fs_listing_filter()`.
