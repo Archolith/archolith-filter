@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from ..normalize import normalize_runtime_noise
 from . import FilterResult
+from .generic import _extract_header
 
 
 @dataclass(frozen=True)
@@ -64,17 +65,6 @@ def _extract_important_lines(lines: list[str]) -> list[str]:
     return [ln for ln in lines if any(p.search(ln) for p in _IMPORTANT_PATTERNS)]
 
 
-def _extract_job_header(lines: list[str]) -> tuple[list[str], list[str]]:
-    """Separate job header lines from the body."""
-    header_end = 0
-    for i, ln in enumerate(lines):
-        if ln.startswith("[job") or ln.startswith("$ ") or ln == "":
-            header_end = i + 1
-        else:
-            break
-    return lines[:header_end], lines[header_end:]
-
-
 def log_filter(formatted: str, opts: LogFilterOptions | None = None) -> FilterResult:
     """Filter log output from background jobs with dedup and readiness preservation."""
     if opts is None:
@@ -89,7 +79,7 @@ def log_filter(formatted: str, opts: LogFilterOptions | None = None) -> FilterRe
         formatted = normalize_runtime_noise(formatted)
 
     lines = formatted.split("\n")
-    header, body = _extract_job_header(lines)
+    header, body = _extract_header(lines)
 
     deduped_body = _collapse_duplicate_runs(body, opts.max_consecutive_dupes)
 

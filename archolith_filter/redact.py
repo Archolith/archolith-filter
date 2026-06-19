@@ -69,8 +69,10 @@ _PATTERN_SPECS: list[str] = [
     r"eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+",
     # 9. Private key headers (begin marker only — PEM body already handled by read_file filter)
     r"-----BEGIN\s+(?:[A-Z0-9]+\s+)?PRIVATE\s+KEY-----",
-    # 10. Connection strings with embedded credentials
-    r"(?:mongodb|postgres|postgresql|mysql|redis)://[^\s\"'\)]+",
+    # 10. Connection strings — redact only the user:pass credential, preserving
+    #     scheme, host, database, and query params for diagnostic context.
+    #     Handles empty-username form (e.g. redis://:password@host).
+    r"""(?<=://)[^\s:@/"']*:[^\s@/"']+(?=@)""",
     # 11. Generic key=value patterns — 32+ char quoted values for apikey/api_key/secret_key
     r"""(?:apikey|api_key|secret_key)\s*[=:]\s*["'][A-Za-z0-9\-_]{32,}["']""",
 ]
