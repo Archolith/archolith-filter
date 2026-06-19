@@ -38,6 +38,9 @@ def is_verbose_command(command: str) -> bool:
 IMPORT_RE = re.compile(r"^\s*(?:from\s+\S+\s+)?import\s+")
 FROM_IMPORT_RE = re.compile(r"^\s*from\s+\S+\s+import\s+")
 COMMENT_LINE_RE = re.compile(r"^\s*(?:#\s|//\s?|/\*|\*\s|\*/)")
+# Single-line comments only (#, //) — narrower than COMMENT_LINE_RE, used for
+# collapsing consecutive line-comment runs without matching block-comment bodies.
+LINE_COMMENT_RE = re.compile(r"^\s*(?://|#)\s")
 
 
 def is_import_line(line: str) -> bool:
@@ -48,6 +51,11 @@ def is_import_line(line: str) -> bool:
 def is_comment_line(line: str) -> bool:
     """Return True if *line* looks like a comment (#, //, /*, * , */)."""
     return bool(COMMENT_LINE_RE.match(line))
+
+
+def is_line_comment(line: str) -> bool:
+    """Return True if *line* is a single-line comment (# or //)."""
+    return bool(LINE_COMMENT_RE.match(line))
 
 
 # ---------------------------------------------------------------------------

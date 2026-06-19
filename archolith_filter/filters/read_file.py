@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from .._patterns import (
     is_comment_line,
     is_import_line,
+    is_line_comment,
 )
 from . import FilterResult
 
@@ -35,7 +36,6 @@ DEFAULT_OPTS = ReadFileFilterOptions()
 
 _CSS_RULE_RE = re.compile(r"^\s*[\w\-\.\#\[\]:,>+~*][\s\w\-\.\#\[\]:,>+~*]*\{")
 _CSS_CLOSE_RE = re.compile(r"\}\s*$")
-_LINE_COMMENT_RE = re.compile(r"^\s*(?://|#)\s")
 _BLOCK_COMMENT_START = re.compile(r"^\s*/\*")
 _BLOCK_COMMENT_END = re.compile(r"\*/\s*$")
 # Unified pattern for compound literal starts (arrays, objects, dicts).
@@ -70,7 +70,7 @@ def _is_comment_line(line: str) -> bool:
 
 
 def _is_line_comment(line: str) -> bool:
-    return bool(_LINE_COMMENT_RE.match(line))
+    return is_line_comment(line)
 
 
 def _is_block_comment_start(line: str) -> bool:

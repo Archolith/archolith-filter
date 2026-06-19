@@ -25,12 +25,13 @@ _READ_FILE_DECL_PRESERVE_FRACTION = 0.6
 _READ_FILE_MIN_TAIL_CHARS = 256
 
 
-def truncate_read_file_for_chars(text: str, max_chars: int) -> str:
-    """Structure-aware truncation for read_file tool output."""
-    if len(text) <= max_chars:
-        return text
+def _collapse_imports_and_comments(lines: list[str]) -> list[str]:
+    """Collapse consecutive import runs (>3) and comment runs (>5) into a marker.
 
-    lines = text.split("\n")
+    Shared by the char- and token-budget read_file truncators so the collapse
+    logic stays in one place. Behaviour-preserving: keeps the first line of an
+    over-length run plus a count marker; short runs pass through unchanged.
+    """
     result_lines: list[str] = []
     idx = 0
     import_count = 0
@@ -86,6 +87,17 @@ def truncate_read_file_for_chars(text: str, max_chars: int) -> str:
             result_lines.append(f" [... {comment_count - 1} more comment lines …]")
         else:
             result_lines.extend(lines[comment_start:comment_start + comment_count])
+
+    return result_lines
+
+
+def truncate_read_file_for_chars(text: str, max_chars: int) -> str:
+    """Structure-aware truncation for read_file tool output."""
+    if len(text) <= max_chars:
+        return text
+
+    lines = text.split("\n")
+    result_lines = _collapse_imports_and_comments(lines)
 
     candidate = "\n".join(result_lines)
     if len(candidate) <= max_chars:
@@ -154,61 +166,7 @@ def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
         return text
 
     lines = text.split("\n")
-    result_lines: list[str] = []
-    idx = 0
-    import_count = 0
-    comment_count = 0
-    import_start = -1
-    comment_start = -1
-
-    while idx < len(lines):
-        line = lines[idx]
-        if is_import_line(line):
-            if import_start == -1:
-                import_start = idx
-            import_count += 1
-            idx += 1
-            continue
-        if import_start != -1:
-            if import_count > 3:
-                result_lines.append(lines[import_start])
-                result_lines.append(f" [... {import_count - 1} more import lines …]")
-            else:
-                result_lines.extend(lines[import_start:import_start + import_count])
-            import_start = -1
-            import_count = 0
-
-        if is_comment_line(line):
-            if comment_start == -1:
-                comment_start = idx
-            comment_count += 1
-            idx += 1
-            continue
-        if comment_start != -1:
-            if comment_count > 5:
-                result_lines.append(lines[comment_start])
-                result_lines.append(f" [... {comment_count - 1} more comment lines …]")
-            else:
-                result_lines.extend(lines[comment_start:comment_start + comment_count])
-            comment_start = -1
-            comment_count = 0
-
-        result_lines.append(line)
-        idx += 1
-
-    if import_start != -1:
-        if import_count > 3:
-            result_lines.append(lines[import_start])
-            result_lines.append(f" [... {import_count - 1} more import lines …]")
-        else:
-            result_lines.extend(lines[import_start:import_start + import_count])
-
-    if comment_start != -1:
-        if comment_count > 5:
-            result_lines.append(lines[comment_start])
-            result_lines.append(f" [... {comment_count - 1} more comment lines …]")
-        else:
-            result_lines.extend(lines[comment_start:comment_start + comment_count])
+    result_lines = _collapse_imports_and_comments(lines)
 
     candidate = "\n".join(result_lines)
     if count_tokens(candidate) <= max_tokens:
