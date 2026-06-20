@@ -1,10 +1,20 @@
 """Archolith Filter — Deterministic output filtering for LLM agent contexts.
 
-Two layers: output filters and shrink.
+Three layers:
+
+- Layer 0 — Pre-filter: ANSI strip, secret redaction, thinking-block strip,
+  binary detection, path normalization, dedupe, oversized guard.
+- Layer 1 — Category filters: 13 shell-command categories + ``read_file``
+  structure-aware compression.
+- Layer 2 — Shrink: char and token-based truncation of oversized messages,
+  plus agent-solo turn compression.
 
 Public API:
     filter_output() — Layer 1: compress tool results before model context
     shrink_messages() — Layer 2: truncate oversized messages in conversation history
+    compress_agent_solo_turn() — Layer 2: turn-level compression for tool-call
+        continuation payloads (four independent strategies: shrink, dedup,
+        filter-middle, compact-tool-args)
 
 Stable public API is documented in ``__all__``.  Everything else is internal
 and may change without notice.
