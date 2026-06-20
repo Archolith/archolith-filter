@@ -25,6 +25,24 @@ class RedactionResult:
 # overlap (e.g., sk-ant-api03- before sk-ant- before sk-).
 
 _PATTERN_SPECS: list[str] = [
+    # =============================================================================
+    # 2026-06-20 audit calibration notes:
+    # - SEC-B1: OpenAI sk- pattern was exactly {48} chars; loosened to {32,} to
+    #   cover legacy 32-char tokens. Added sk_proj_ and sk_svcacct_ underscore
+    #   variants for keys seen in the wild using underscore separators (the
+    #   official OpenAI format uses dashes — sk-proj- / sk-svcacct- — which
+    #   are kept above). The archolith-security AI-A2 separately claims
+    #   "ASIA[0-9A-Z]{16}" was missing — that was a false alarm; pattern #1
+    #   below already covers it via the (?:AKIA|ASIA|AGPA|AIDA|AROA) prefix.
+    # - DR-2: Audit claimed "AC-prefix alphanumeric tokens" missed for Twilio
+    #   — but those are Account SIDs (public identifiers, not secrets). The
+    #   real miss was bare auth_token=<hex>, addressed here by extending
+    #   pattern #11's keyword list to include auth_token / authToken /
+    #   TWILIO_AUTH_TOKEN. The quote requirement is intentionally kept to
+    #   avoid false positives on git SHAs / content hashes; bare unquoted
+    #   auth_token=<hex> remains uncaught by design (see the audit's
+    #   distribution-plan follow-up notes).
+    # =============================================================================
     # 1. AWS access key IDs — well-documented 4-letter prefixes + 16 alphanum chars
     r"(?:AKIA|ASIA|AGPA|AIDA|AROA)[A-Z0-9]{16}",
     # 2. AI provider keys (most-specific-first because they share sk- prefix)
@@ -32,12 +50,16 @@ _PATTERN_SPECS: list[str] = [
     r"sk-ant-api03-[A-Za-z0-9\-_]{80,}",
     #    Anthropic standard
     r"sk-ant-[A-Za-z0-9\-_]{20,}",
-    #    OpenAI project
+    #    OpenAI project (dash separator)
     r"sk-proj-[A-Za-z0-9\-_]{40,}",
-    #    OpenAI service account
+    #    OpenAI service account (dash separator)
     r"sk-svcacct-[A-Za-z0-9\-_]{40,}",
-    #    OpenAI standard (exactly 48 alphanum after sk-)
-    r"sk-[A-Za-z0-9]{48}",
+    #    OpenAI project (underscore separator — non-standard but seen in the wild)
+    r"sk_proj_[A-Za-z0-9\-_]{40,}",
+    #    OpenAI service account (underscore separator — non-standard)
+    r"sk_svcacct_[A-Za-z0-9\-_]{40,}",
+    #    OpenAI standard — legacy (32-char) and modern (48-char)
+    r"sk-[A-Za-z0-9]{32,}",
     # 3. VCS tokens
     #    GitHub fine-grained PAT
     r"github_pat_[A-Za-z0-9_]{36,}",
@@ -73,8 +95,13 @@ _PATTERN_SPECS: list[str] = [
     #     scheme, host, database, and query params for diagnostic context.
     #     Handles empty-username form (e.g. redis://:password@host).
     r"""(?<=://)[^\s:@/"']*:[^\s@/"']+(?=@)""",
-    # 11. Generic key=value patterns — 32+ char quoted values for apikey/api_key/secret_key
-    r"""(?:apikey|api_key|secret_key)\s*[=:]\s*["'][A-Za-z0-9\-_]{32,}["']""",
+    # 11. Generic key=value patterns — 32+ char quoted values for known
+    #     credential-key keyword names. Keyword list extended (DR-2) to
+    #     include auth_token / authToken / TWILIO_AUTH_TOKEN so the quoted
+    #     variant of those bare-token assignments gets caught. Unquoted
+    #     bare forms are intentionally NOT caught here to avoid false
+    #     positives on content hashes and git SHAs.
+    r"""(?:apikey|api_key|secret_key|auth_token|authToken|TWILIO_AUTH_TOKEN)\s*[=:]\s*["'][A-Za-z0-9\-_]{32,}["']""",
 ]
 
 # Compile into a single alternation regex with IGNORECASE.

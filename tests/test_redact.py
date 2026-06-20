@@ -197,3 +197,126 @@ class TestRedactSecrets:
         text = "key1=AKIAIOSFODNN7EXAMPLE key2=AKIAIOSFODNN7EXAMPLF"
         result = redact_secrets(text)
         assert result.redaction_count == 2
+
+
+# ── 2026-06-20 audit calibration: SEC-B1 + DR-2 ──────────────────────────
+
+
+class TestAuditCalibration2026_06_20:
+    """New patterns added in the SEC-B1 + DR-2 remediation (see
+    archolith-filter-remediation-plan-2026-06-20.md Session E)."""
+
+    # ── SEC-B1: OpenAI key variants ──
+
+    def test_openai_legacy_32_char_redacted(self):
+        """Legacy OpenAI sk- keys are 32 alphanum chars — previously missed
+        because the pattern required exactly 48 chars."""
+        key = "sk-" + "a" * 32
+        result = redact_secrets(f"token is {key} here")
+        assert "[REDACTED]" in result.output
+        assert key not in result.output
+
+    def test_openai_modern_48_char_redacted(self):
+        """Modern OpenAI sk- keys are 48 alphanum chars (regression guard)."""
+        key = "sk-" + "a" * 48
+        result = redact_secrets(f"token is {key} here")
+        assert "[REDACTED]" in result.output
+        assert key not in result.output
+
+    def test_openai_long_alphanum_redacted(self):
+        """Anything >= 32 alphanums after sk- is caught (regression guard
+        for the {32,} lower bound)."""
+        key = "sk-" + "x" * 60
+        result = redact_secrets(f"OPENAI={key}")
+        assert "[REDACTED]" in result.output
+
+    def test_openai_short_31_char_not_redacted(self):
+        """Keys shorter than 32 chars after sk- are NOT redacted
+        (false positive guard)."""
+        key = "sk-" + "a" * 31
+        result = redact_secrets(f"OPENAI={key}")
+        assert "[REDACTED]" not in result.output
+
+    def test_openai_sk_proj_underscore_redacted(self):
+        """Non-standard sk_proj_ underscore variant (seen in the wild)."""
+        key = "sk_proj_" + "a" * 40
+        result = redact_secrets(f"OPENAI={key}")
+        assert "[REDACTED]" in result.output
+        assert key not in result.output
+
+    def test_openai_sk_svcacct_underscore_redacted(self):
+        """Non-standard sk_svcacct_ underscore variant (seen in the wild)."""
+        key = "sk_svcacct_" + "a" * 40
+        result = redact_secrets(f"OPENAI={key}")
+        assert "[REDACTED]" in result.output
+        assert key not in result.output
+
+    def test_openai_dash_variants_still_redacted(self):
+        """Regression guard: dash-separated variants remain caught."""
+        for prefix in ("sk-proj-", "sk-svcacct-"):
+            key = prefix + "z" * 42
+            result = redact_secrets(f"OPENAI={key}")
+            assert "[REDACTED]" in result.output, f"{prefix} variant should be redacted"
+
+    def test_asia_aws_key_still_redacted(self):
+        """Regression guard for audit's incorrect SEC-B1 claim that 'ASIA'
+        was missing — pattern #1 has always covered ASIA via the prefix
+        alternation."""
+        result = redact_secrets("role=ASIAIOSFODNN7EXAMPLE")
+        assert "[REDACTED]" in result.output
+        assert "ASIAIOSFODNN7EXAMPLE" not in result.output
+
+    # ── DR-2: keyword extension for pattern #11 ──
+
+    def test_auth_token_quoted_redacted(self):
+        """`auth_token` keyword + quoted 32-char value (bare-keyword form,
+        NOT the JSON-quoted-key form) is now caught via the pattern #11
+        keyword extension."""
+        text = 'auth_token="' + "a" * 32 + '"'
+        result = redact_secrets(text)
+        assert "[REDACTED]" in result.output
+
+    def test_authToken_camel_case_quoted_redacted(self):
+        """camelCase `authToken` keyword with quoted 32+ value is caught."""
+        text = 'authToken: "' + "b" * 36 + '"'
+        result = redact_secrets(text)
+        assert "[REDACTED]" in result.output
+
+    def test_auth_token_in_json_dict_NOT_redacted(self):
+        """Documented limitation: when the keyword is JSON-quoted
+        (``{"auth_token": "..."}``), pattern #11 does NOT match because the
+        regex expects the keyword bare (not wrapped in its own quotes).
+        The auth_token bare-keyword form (e.g. ``auth_token="..."`` from
+        dotenv / env-var files) is the supported form; JSON-quoted keys are
+        deferred to a follow-up pattern revision to avoid interaction with
+        the JSON redaction-prevention guards."""
+        text = '{"auth_token": "' + "a" * 32 + '"}'
+        result = redact_secrets(text)
+        assert "[REDACTED]" not in result.output
+
+    def test_twilio_auth_token_quoted_redacted(self):
+        """`TWILIO_AUTH_TOKEN` keyword + quoted 32-char hex is caught via
+        pattern #11 keyword extension."""
+        text = 'TWILIO_AUTH_TOKEN="' + "f" * 32 + '"'
+        result = redact_secrets(text)
+        assert "[REDACTED]" in result.output
+
+    def test_bare_auth_token_NOT_redacted_for_now(self):
+        """Documented limitation: bare `auth_token = <32 hex>` without
+        surrounding quotes is intentionally NOT matched to avoid false
+        positives on git SHAs / content hashes. Follow-up tracked in the
+        distribution plan."""
+        text = "auth_token = " + "a" * 32 + " here"
+        result = redact_secrets(text)
+        # The keyword and bare value should both be intact.
+        assert "auth_token = " in result.output
+        assert "a" * 32 in result.output
+        # Value not redacted — no marker.
+        assert "[REDACTED]" not in result.output
+
+    def test_short_auth_token_quoted_NOT_redacted(self):
+        """False-positive guard: <32 char values not flagged even with the
+        auth_token keyword."""
+        text = 'auth_token: "' + "a" * 20 + '"'
+        result = redact_secrets(text)
+        assert "[REDACTED]" not in result.output
