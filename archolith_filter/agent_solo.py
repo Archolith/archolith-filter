@@ -136,11 +136,29 @@ _CHARS_PER_TOKEN = 4
 def _apply_shrink(
     messages: list[dict[str, Any]],
     max_tokens: int,
+    *,
+    tail_start_index: int | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """Char-budget every tool-role message (~4 chars/token).
 
     Uses ``truncate_for_chars`` instead of tiktoken-based shrinking so
     the cost is O(n) string slicing, not O(n) tokenization.
+
+    When ``tail_start_index`` is provided, messages from that index
+    onward (the coherence tail) are NEVER shrunk. This mirrors the
+    tail-guard already present in ``_apply_dedup`` (Strategy B) and
+    prevents Strategy A from re-truncating the recency tail the model
+    depends on for coherence.
+
+    Note (AI-C1 edge case, by design):
+        When both Strategy A and Strategy C are enabled, A may still
+        truncate tail messages that were ALREADY truncated by C's
+        ``_shrink_tail_messages`` in this same pass. The audit rejected
+        option "B" (cross-strategy coordination) in favour of the simpler
+        tail-guard fix here; revisit if production traces show real
+        over-truncation. Today, the tail-guard at least prevents A from
+        shrinking the tail when C is OFF, which is the regression guard
+        this fix targets.
 
     Returns (processed_messages, chars_saved).
     """
@@ -150,16 +168,18 @@ def _apply_shrink(
     result: list[dict[str, Any]] = []
     chars_saved = 0
 
-    for msg in messages:
+    for idx, msg in enumerate(messages):
         if msg.get("role") != "tool":
             result.append(msg)
             continue
-
+        # Tail-guard: never shrink messages in the coherence tail.
+        if tail_start_index is not None and idx >= tail_start_index:
+            result.append(msg)
+            continue
         content = msg.get("content")
         if not isinstance(content, str) or len(content) <= max_chars:
             result.append(msg)
             continue
-
         truncated = truncate_for_chars(content, max_chars)
         chars_saved += len(content) - len(truncated)
         result.append({**msg, "content": truncated})
@@ -229,8 +249,8 @@ def _apply_dedup(
             continue
 
         # Multiple occurrences: keep the LAST, replace earlier ones
-        # (unless they're in the tail).
-        last_idx = indices[-1]
+        # (unless they're in the tail). The loop iterates indices[:-1]
+        # so the last index is implicitly preserved without being read.
         for earlier_idx in indices[:-1]:
             if earlier_idx < tail_start:
                 # Safe to replace: it's in the middle section
@@ -572,13 +592,11 @@ def compress_agent_solo_turn(
         except Exception:
             pass  # fail-open
 
-    # Compute tail boundary for Strategy C and B to share
-    tail_start_index: int | None = None
-    if filter_middle_enabled or dedup_enabled:
-        # Determine which messages form the tail for both strategies
-        system, middle, tail = _split_sections(result, coherence_tail_size)
-        if middle:
-            tail_start_index = len(system) + len(middle)
+    # Compute tail boundary for Strategies B and A to share. Always run
+    # (cheap O(n) scan) so Strategy A gets the same tail-guard Strategy B
+    # already had — see AI-C1.
+    system, middle, tail = _split_sections(result, coherence_tail_size)
+    tail_start_index: int | None = len(system) + len(middle) if middle else None
 
     # Strategy C — filter middle section + shrink tail
     if filter_middle_enabled:
@@ -608,7 +626,11 @@ def compress_agent_solo_turn(
     # Strategy A — shrink remaining tool results
     if shrink_enabled:
         try:
-            result, saved = _apply_shrink(result, max_tokens=shrink_max_tokens)
+            result, saved = _apply_shrink(
+                result,
+                max_tokens=shrink_max_tokens,
+                tail_start_index=tail_start_index,
+            )
             stats.chars_saved_shrink = saved
             if saved > 0:
                 stats.strategies_applied.append("shrink")

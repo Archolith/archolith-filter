@@ -315,3 +315,118 @@ class TestOrchestrator:
         assert result.messages[0]["content"] == "sys"
         assert result.messages[1]["content"] == "hi"
         assert result.messages[2]["content"] == "bye"
+
+
+# ─── Strategy A tail-guard (AI-C1) ────────────────────────────────────────
+
+
+class TestShrinkTailGuard:
+    """AI-C1: Strategy A's shrink pass must not truncate the coherence tail,
+    mirroring the tail-guard Strategy B already had."""
+
+    def test_shrink_skips_last_n_tool_messages(self):
+        """With 5 large tool messages and coherence_tail_size=2, the last 2
+        tool messages must be intact; the earlier 3 must be truncated."""
+        large = "x" * 2000
+        messages = [
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+        ]
+        result = compress_agent_solo_turn(
+            messages,
+            shrink_enabled=True,
+            shrink_max_tokens=100,  # max_chars ~= 400
+            coherence_tail_size=2,
+        )
+        # Earlier 3 tool messages SHOULD be truncated.
+        for idx in (0, 1, 2):
+            assert len(result.messages[idx]["content"]) < 2000, (
+                f"middle tool message at idx {idx} should be truncated"
+            )
+        # Last 2 tool messages (the tail) should be intact.
+        for idx in (3, 4):
+            assert result.messages[idx]["content"] == large, (
+                f"tail tool message at idx {idx} should be preserved verbatim"
+            )
+        # The shrink strategy did save chars from the middle.
+        assert result.stats.chars_saved_shrink > 0
+        assert "shrink" in result.stats.strategies_applied
+
+    def test_shrink_no_tail_guard_when_too_few_messages(self):
+        """When messages are too few to form a middle section, ``_split_sections``
+        returns ``(system, [], rest)`` and middle is empty — the orchestrator
+        sets ``tail_start_index=None`` (no boundary to compute). With no tail
+        guard, shrink still applies. This matches the existing semantics for
+        Strategy B (dedup with no middle) and the direct-API default of
+        ``_apply_shrink(messages, max_tokens=X)``."""
+        large = "y" * 2000
+        messages = [_tool_msg(large, name="bash")]
+        result = compress_agent_solo_turn(
+            messages,
+            shrink_enabled=True,
+            shrink_max_tokens=100,
+            coherence_tail_size=2,  # >len(messages), so no middle -> no tail boundary
+        )
+        # No middle -> tail_start_index=None -> shrink applies unguarded.
+        assert len(result.messages[0]["content"]) < 2000
+        assert result.stats.chars_saved_shrink > 0
+
+    def test_shrink_default_tail_index_none_truncates_all(self):
+        """Direct call to _apply_shrink with the default tail_start_index=None
+        truncates all tool messages (backward-compatible behavior for direct
+        API callers who don't compute a tail)."""
+        from archolith_filter.agent_solo import _apply_shrink
+
+        large = "z" * 2000
+        messages = [_tool_msg(large, name="bash"), _tool_msg(large, name="bash")]
+        result, saved = _apply_shrink(messages, max_tokens=100)
+        # Both messages truncated.
+        assert len(result[0]["content"]) < 2000
+        assert len(result[1]["content"]) < 2000
+        assert saved > 0
+
+    def test_shrink_explicit_tail_index_protects_tail(self):
+        """Direct call: tail_start_index=1 protects index >=1, truncates <1."""
+        from archolith_filter.agent_solo import _apply_shrink
+
+        large = "q" * 2000
+        messages = [
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+        ]
+        result, saved = _apply_shrink(messages, max_tokens=100, tail_start_index=1)
+        # Index 0 truncated, indices 1 and 2 protected.
+        assert len(result[0]["content"]) < 2000
+        assert result[1]["content"] == large
+        assert result[2]["content"] == large
+        assert saved > 0
+
+    def test_shrink_tail_guard_with_system_prefix(self):
+        """When a system message precedes the tool messages, the tail index
+        is correctly offset to account for the system prefix."""
+        large = "w" * 2000
+        messages = [
+            _system_msg(),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+        ]
+        result = compress_agent_solo_turn(
+            messages,
+            shrink_enabled=True,
+            shrink_max_tokens=100,
+            coherence_tail_size=2,
+        )
+        # system (idx 0) is unchanged; middle tools (idx 1-3) truncated.
+        assert result.messages[0]["content"] == "you are helpful"
+        for idx in (1, 2, 3):
+            assert len(result.messages[idx]["content"]) < 2000
+        # Tail tools (idx 4-5) intact.
+        for idx in (4, 5):
+            assert result.messages[idx]["content"] == large
