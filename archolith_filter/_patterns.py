@@ -11,7 +11,9 @@ import re
 
 # ---------------------------------------------------------------------------
 # Verbose flag detection — used by filter_meta.is_verbose_command and
-# config.is_verbose_command (which currently recompiles on every call).
+# config.is_verbose_command. The patterns below are pre-compiled at import
+# time into VERBOSE_FLAG_PATTERNS so callers share one compiled regex set
+# rather than recompiling on every call.
 # ---------------------------------------------------------------------------
 
 VERBOSE_FLAG_PATTERNS: list[re.Pattern[str]] = [

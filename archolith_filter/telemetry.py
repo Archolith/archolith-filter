@@ -13,7 +13,7 @@ def _estimate_tokens_heuristic(char_count: int) -> int:
     return round(char_count / CHARS_PER_TOKEN)
 
 
-@dataclass
+@dataclass(frozen=True)
 class FilterTelemetryEntry:
     command: str
     tool: str | None

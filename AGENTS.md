@@ -48,7 +48,15 @@ See `.agent/workflows/code_conventions.md` for full rules. Key points:
 
 - This is a **deterministic token reduction library** — it does NOT call any LLM. All filtering is mechanical and sub-millisecond.
 - Zero mandatory external dependencies. tiktoken is optional (`archolith-filter[tokenizer]`).
-- Three layers: L0 pre-filter (ANSI strip, secret redaction, path normalization), L1 category filters (13 command categories), L2 shrink (char/token budgets).
+- Three layers:
+  - **L0** pre-filter — ANSI strip, secret redaction, thinking block strip, path normalization, binary detection, oversized guard, cross-turn dedupe
+  - **L1** category filters — 13 shell-command categories + `read_file` structure-aware compression
+  - **L2** shrink — char and token-based truncation of oversized messages
+- Plus **agent-solo turn compression** (`compress_agent_solo_turn()`) — 4 mechanical strategies applied at the proxy level when compressing tool-call continuation payloads:
+  - **A** shrink — char-budget every tool-role message (~4 chars/token)
+  - **B** dedup — payload-scoped keep-newest byte-identical tool results
+  - **C** filter middle — apply `filter_output()` to compressible tools in the historical (middle) section
+  - **D** compact tool args — replace large arguments in completed tool_use calls with compact summaries
 - The `_compact` convention is the workspace standard for reduced-response modes. See the parent `.agent/CONVENTIONS.md` for full rules.
 - `_patterns.py` is the single source of truth for shared regex patterns used by `filters/read_file.py`, `shrink/read_file_truncate.py`, and `config.py`.
 - `raw_store.py` provides LRU-backed raw output recovery by ID. Module-level singleton, cleared on process restart.

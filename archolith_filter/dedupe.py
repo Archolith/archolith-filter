@@ -34,6 +34,9 @@ class DedupeTracker:
             return updated.occurrence
         self._seen[key] = DedupeHit(occurrence=1)
         if len(self._seen) > self._max_entries:
+            # Evict oldest: CPython 3.7+ guarantees dict insertion order,
+            # so next(iter(self._seen)) returns the first key inserted
+            # (FIFO semantics) without needing an OrderedDict (FC-B1).
             oldest_key = next(iter(self._seen))
             del self._seen[oldest_key]
         return 1

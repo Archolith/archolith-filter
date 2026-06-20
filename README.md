@@ -29,6 +29,30 @@ messages = [{"role": "tool", "content": "..."}]
 shrunk = shrink_messages(messages, max_chars=4000)
 ```
 
+## Development Installation
+
+```bash
+# Dev dependencies: pytest, pytest-benchmark, pytest-cov, ruff
+pip install -e ".[dev]"
+```
+
+Two more optional extras:
+
+- `[tokenizer]` — installs `tiktoken` for accurate BPE token counting.
+  Without it, the library falls back to a ~4 chars/token heuristic that
+  under-counts code tokens; this matters primarily for standalone installs
+  that don't also have `tiktoken` available. Production deployments via
+  `archolith-context` and `archolith-mcp-audit` always pull `tiktoken` as
+  a hard dependency, so the heuristic fallback is just a development
+  convenience path here.
+- `[context]` — installs `archolith-proxy>=0.1.0`, the local clone of
+  `archolith-context`'s proxy module. **Note**: `archolith-proxy` is not
+  published to PyPI yet, so this extra currently fails on
+  a fresh checkout. For local development against a checked-out
+  `archolith-context` worktree, point `pip` at the local clone
+  (`pip install -e "../archolith-context[archolith_filter]"`) instead.
+  Distribution is tracked in the separate `ARCHOLITH-FILTER-DISTRIBUTION-PLAN` follow-up.
+
 ## Documentation
 
 | File | Purpose |

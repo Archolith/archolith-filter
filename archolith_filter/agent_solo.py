@@ -41,10 +41,13 @@ Usage::
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from .dedupe import DedupeTracker
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -119,9 +122,20 @@ def _is_compressible_tool(tool_name: str) -> bool:
     name = tool_name.lower()
     if name in _COMPRESSIBLE_TOOLS:
         return True
-    # Prefix match for namespaced tools (e.g. "mcp__brave__search")
+    # Suffix match for namespaced tools (e.g. "mcp__brave__search") and
+    # bare custom tools ending in "_bash" / "_find" / etc. (AI-C2).
+    # ``endswith`` requires the suffix at the END (not substring), so the
+    # audit's original "my_custom_bash_runner" example does NOT match —
+    # the actual false-positive surface is narrow. We log DEBUG on every
+    # non-trivial suffix classification so production traces surface any
+    # genuinely mis-classified custom tools; revisit AI-C2 fixed-form if
+    # real false positives appear in DEBUG after 30–60 days.
     for compressible in _COMPRESSIBLE_TOOLS:
         if name.endswith(f"__{compressible}") or name.endswith(f"_{compressible}"):
+            _log.debug(
+                "suffix_match_classified_compressible tool_name=%r matched_suffix=%r (non-MCP)",
+                name, compressible,
+            )
             return True
     return False
 
@@ -589,8 +603,8 @@ def compress_agent_solo_turn(
             stats.chars_saved_compact = saved
             if saved > 0:
                 stats.strategies_applied.append("compact")
-        except Exception:
-            pass  # fail-open
+        except Exception as exc:  # fail-open
+            _log.debug("agent_solo strategy D (compact) failed: %s", exc)
 
     # Compute tail boundary for Strategies B and A to share. Always run
     # (cheap O(n) scan) so Strategy A gets the same tail-guard Strategy B
@@ -609,8 +623,8 @@ def compress_agent_solo_turn(
             stats.chars_saved_filter = saved
             if saved > 0:
                 stats.strategies_applied.append("filter")
-        except Exception:
-            pass  # fail-open
+        except Exception as exc:  # fail-open
+            _log.debug("agent_solo strategy C (filter) failed: %s", exc)
 
     # Strategy B — dedup payload-scoped with tail guard
     # (before shrink so markers stay compact)
@@ -620,8 +634,8 @@ def compress_agent_solo_turn(
             stats.chars_saved_dedup = saved
             if saved > 0:
                 stats.strategies_applied.append("dedup")
-        except Exception:
-            pass  # fail-open
+        except Exception as exc:  # fail-open
+            _log.debug("agent_solo strategy B (dedup) failed: %s", exc)
 
     # Strategy A — shrink remaining tool results
     if shrink_enabled:
@@ -634,8 +648,8 @@ def compress_agent_solo_turn(
             stats.chars_saved_shrink = saved
             if saved > 0:
                 stats.strategies_applied.append("shrink")
-        except Exception:
-            pass  # fail-open
+        except Exception as exc:  # fail-open
+            _log.debug("agent_solo strategy A (shrink) failed: %s", exc)
 
     stats.total_chars_saved = (
         stats.chars_saved_shrink

@@ -293,7 +293,7 @@ def from_env() -> FilterConfig:
         search_max_files=_env_int("ARCHOLITH_FILTER_SEARCH_MAX_FILES", base.search_max_files, _MAX_ENTRIES),
         search_head_lines=_env_int("ARCHOLITH_FILTER_SEARCH_HEAD", base.search_head_lines, _MAX_LINE_LINES),
         search_tail_lines=_env_int("ARCHOLITH_FILTER_SEARCH_TAIL", base.search_tail_lines, _MAX_LINE_LINES),
-json_max_keys_per_object=_env_int(
+        json_max_keys_per_object=_env_int(
             "ARCHOLITH_FILTER_JSON_MAX_KEYS", base.json_max_keys_per_object, _MAX_ENTRIES
         ),
         json_max_array_items=_env_int(

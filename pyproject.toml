@@ -14,7 +14,10 @@ keywords = ["llm", "token-reduction", "output-filtering", "agent"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: Other/Proprietary License",
+    # Note: "License :: Other/Proprietary License" classifier removed (deprecated).
+    # The project uses a custom PolyForm Noncommercial license; the
+    # `license = "LicenseRef-PolyForm-Noncommercial-1.0.0"` field above is
+    # the canonical declaration.
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

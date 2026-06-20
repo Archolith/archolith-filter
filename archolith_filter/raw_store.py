@@ -1,4 +1,23 @@
-"""Session-scoped store for pre-filter output, recoverable by ID."""
+"""Session-scoped store for pre-filter output, recoverable by ID.
+
+Eviction policy trade-off note (FC-B2 / PERF-01):
+    The store uses a dict keyed by an ever-increasing integer ID. Under
+    CPython 3.7+ dict insertion order matches ID order, so eviction by
+    ``list(self._entries.keys())[:excess]`` (per PERF-01 fix) evicts
+    the OLDEST entries in O(n) without an O(n log n) sort.
+
+    When an entry is evicted, the telemetry store
+    (``FilterTelemetryStore``) and any other references it owns on a
+    ``raw_output_id`` are NOT synchronously cleared — callers that
+    resolve a stale ``raw_output_id`` via ``RawOutputStore.get()`` will
+    receive ``None`` (the entry is gone) and must handle that
+    gracefully. This is a deliberate trade-off: synchronous cross-store
+    callback on eviction would add coupling and lock contention for a
+    telemetry-stale-reference case that is rare (and only matters for
+    diagnostic dashboards trying to fetch raw output long after the
+    filter call). The trade-off is documented here so future maintainers
+    know the dangling-reference behaviour is intended, not a bug.
+"""
 
 from __future__ import annotations
 
@@ -48,11 +67,13 @@ class RawOutputStore:
             stored_at=time.time(),
         )
 
-        # Evict oldest entries over capacity.
+        # Evict oldest entries over capacity. CPython 3.7+ guarantees dict
+        # insertion order, so list(self._entries.keys())[:excess] returns
+        # the oldest keys (which, given monotonic _next_id, are also the
+        # numerically smallest IDs) in O(n) — no sort needed (PERF-01).
         if len(self._entries) > self._max_entries:
-            keys = sorted(self._entries.keys())
             excess = len(self._entries) - self._max_entries
-            for key in keys[:excess]:
+            for key in list(self._entries.keys())[:excess]:
                 del self._entries[key]
 
         return entry_id

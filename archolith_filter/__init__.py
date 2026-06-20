@@ -22,6 +22,8 @@ and may change without notice.
 
 from __future__ import annotations
 
+import logging
+
 from .agent_solo import AgentSoloResult, AgentSoloStats, compress_agent_solo_turn
 from .classifier import ClassifiedCommand, CommandCategory, classify_command
 from .config import (
@@ -129,6 +131,8 @@ __all__ = [
 "strip_ansi",
 "strip_thinking_blocks",
 ]
+
+_log = logging.getLogger(__name__)
 
 # Minimum result length (chars) to justify filtering overhead.
 _MIN_FILTER_CHARS = 500
@@ -498,8 +502,13 @@ def filter_output(
 
         return result
 
-    except Exception:
+    except Exception as exc:
         # Fail open: any error returns the stripped string.
+        _log.warning(
+            "filter_output pipeline raised; fail-open returned unfiltered text "
+            "(command=%r tool=%r error=%s)",
+            command, tool, exc,
+        )
         store = get_raw_output_store()
         raw_id = store.store(redacted, command=command or tool, tool=tool, filtered_chars=len(stripped))
         record_filter_telemetry(

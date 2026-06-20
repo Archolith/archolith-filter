@@ -1,0 +1,126 @@
+archolith-filter — Third-Party License Notices
+==============================================
+
+This distribution includes references to (or optional dependencies on) the
+following third-party software. Each entry below lists the package, its SPDX
+identifier (or short-form license name), the upstream project URL, and the
+full license text where the upstream ships one. None of these packages are
+bundled in source form within the archolith-filter distribution; users install
+them through normal pip / PEP 517 workflows.
+
+This file is provided for compliance and attribution purposes; it does not
+modify the archolith-filter license (PolyForm Noncommercial 1.0.0) declared
+in pyproject.toml.
+
+
+1. tiktoken  (optional extra: archolith-filter[tokenizer])
+   ----------------------------------------------------------
+   Upstream:    https://github.com/openai/tiktoken
+   License:     MIT
+   Copyright:   openai/tiktoken contributors
+   Summary:
+     Used when accurate BPE tokenization is required (truncate_for_tokens,
+     count_tokens). Optional: archolith-filter functions correctly without
+     tiktoken installed, falling back to the ~4 chars/token heuristic.
+
+   MIT License
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included
+   in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+
+2. pytest  (optional extra: archolith-filter[dev])
+   ------------------------------------------------
+   Upstream:    https://github.com/pytest-dev/pytest
+   License:     MIT
+   Copyright:   Holger Krekel and pytest contributors
+   Summary:
+     Test framework for the archolith-filter test suite.
+
+   (MIT license text — same as tiktoken above.)
+
+
+3. pytest-benchmark  (optional extra: archolith-filter[dev])
+   ----------------------------------------------------------
+   Upstream:    https://github.com/ionelmc/pytest-benchmark
+   License:     BSD 2-Clause License
+   Copyright:   (c) ionelmc/pytest-benchmark contributors
+
+   BSD 2-Clause License
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are met:
+
+   1. Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+   2. Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimer in the documentation
+      and/or other materials provided with the distribution.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+   ARE DISCLAIMED.
+
+
+4. pytest-cov  (optional extra: archolith-filter[dev])
+   ----------------------------------------------------
+   Upstream:    https://github.com/pytest-dev/pytest-cov
+   License:     MIT
+   Copyright:   Meme, Inc. and pytest-cov contributors
+
+   (MIT license text — same as tiktoken above.)
+
+
+5. ruff  (optional extra: archolith-filter[dev])
+   ----------------------------------------------
+   Upstream:    https://github.com/astral-sh/ruff
+   License:     MIT
+   Copyright:   astral-sh/ruff contributors
+
+   (MIT license text — same as tiktoken above.)
+
+   Summary: Linter and formatter used for archolith-filter's CI/safety pass.
+
+
+Attribution sources
+-------------------
+
+Several redaction patterns in `archolith_filter/redact.py` were derived from
+publicly documented specifications:
+
+- AWS access key ID format (AKIA/ASIA/AGPA/AIDA/AROA prefix + 16 chars):
+  AWS documentation on IAM identifiers.
+
+- JWT format (three base64url segments starting with `eyJ`):
+  RFC 7519 (JSON Web Token) section 2 and 3.
+
+- OpenAI API key formats (sk-, sk-proj-, sk-svcacct-, sk-svcacct-underscore,
+  sk_proj_underscore):
+  OpenAI platform documentation on API keys and project keys.
+
+- Anthropic API key formats (sk-ant-, sk-ant-api03-):
+  Anthropic platform documentation on API keys.
+
+- GitHub, GitLab, Slack, Twilio, Stripe, SendGrid, npm, PyPI, Docker Hub,
+  Sentry tokens:
+  Public vendor documentation for each respective platform.
+
+No code was copied verbatim from those documents — the patterns were
+re-derived from the publicly described formats. See the inline comments in
+`redact.py` for per-pattern source notes.
+
+- Protocol / TLS / connection-string parsing references in
+  `archolith_filter/redact.py` (pattern #10, user:pass credential extraction
+  from `scheme://user:pass@host`):
+  RFC 3986 (Uniform Resource Identifier) section 3.2.1 (User Information).
