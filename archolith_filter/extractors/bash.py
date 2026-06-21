@@ -14,8 +14,8 @@ import httpx
 
 from archolith_filter.classifier import classify_command
 from archolith_filter.extractors.base import (
-    PartialExtractionResult,
     FilterExtractorBase,
+    PartialExtractionResult,
     ToolCallRecord,
 )
 from archolith_filter.strip_ansi import strip_ansi

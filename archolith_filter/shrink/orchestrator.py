@@ -31,6 +31,8 @@ from .read_file_truncate import (
 from .token_counter import count_tokens
 from .truncate import truncate_for_chars, truncate_for_tokens
 
+_MESSAGE_FRAMING_TOKENS = 15
+
 
 def shrink_oversized_tool_results(
     messages: list[ChatMessage],
@@ -223,10 +225,12 @@ def shrink_messages(
 def estimate_conversation_tokens(messages: list[ChatMessage]) -> int:
     """Estimate total tokens across all messages (content + tool_calls).
 
-    Doesn't add chat-template framing overhead; under-counts ~3-6% vs real prompt_tokens.
+    Includes a small per-message framing estimate so callers do not undercount
+    chat-template overhead when comparing against prompt budgets.
     """
     total = 0
     for m in messages:
+        total += _MESSAGE_FRAMING_TOKENS
         if isinstance(m.content, str) and m.content:
             total += count_tokens(m.content)
         if m.tool_calls:

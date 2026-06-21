@@ -2,10 +2,11 @@
 
 Deterministic Token Reduction Toolkit for LLM agent contexts. Compresses tool output, truncates oversized conversation messages, and applies mechanical turn-level compression — all without requiring LLM calls.
 
-Three layers of reduction:
+Reduction layers:
 1. **Layer 0** — Pre-filter: ANSI strip, secret redaction, thinking block strip, path normalization
 2. **Layer 1** — Category filters: 13 shell-command categories + `read_file` structure-aware compression
 3. **Layer 2** — Shrink: Char and token-based truncation of oversized messages
+4. **Layer 3** — Agent-solo turn compression: mechanical shrink/dedup/filter/compact strategies for tool-call continuation payloads
 
 Zero mandatory external dependencies. tiktoken is optional for accurate token counting.
 
@@ -39,8 +40,9 @@ pip install -e ".[dev]"
 Two more optional extras:
 
 - `[tokenizer]` — installs `tiktoken` for accurate BPE token counting.
-  Without it, the library falls back to a ~4 chars/token heuristic that
-  under-counts code tokens; this matters primarily for standalone installs
+  Without it, the library falls back to a shape-aware heuristic: prose uses
+  the historical ~4 chars/token estimate, while code/config-like text uses
+  a more conservative ~3.2 chars/token estimate. This matters primarily for standalone installs
   that don't also have `tiktoken` available. Production deployments via
   `archolith-context` and `archolith-mcp-audit` always pull `tiktoken` as
   a hard dependency, so the heuristic fallback is just a development

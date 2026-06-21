@@ -12,7 +12,7 @@ Three layers:
 Public API:
     filter_output() — Layer 1: compress tool results before model context
     shrink_messages() — Layer 2: truncate oversized messages in conversation history
-    compress_agent_solo_turn() — Layer 2: turn-level compression for tool-call
+    compress_agent_solo_turn() — Layer 3: turn-level compression for tool-call
         continuation payloads (four independent strategies: shrink, dedup,
         filter-middle, compact-tool-args)
 

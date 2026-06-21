@@ -10,8 +10,8 @@ from __future__ import annotations
 import httpx
 
 from archolith_filter.extractors.base import (
-    PartialExtractionResult,
     FilterExtractorBase,
+    PartialExtractionResult,
     ToolCallRecord,
 )
 

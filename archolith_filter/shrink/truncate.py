@@ -5,7 +5,7 @@ Import DAG: depends on token_counter.
 
 from __future__ import annotations
 
-from .token_counter import count_tokens
+from .token_counter import count_tokens, token_counts_are_estimated
 
 # ─── Constants ───
 
@@ -17,8 +17,8 @@ _TAIL_FRACTION = 0.1
 _TAIL_MAX_CHARS = 1024
 _TAIL_MAX_TOKENS = 256
 _MARKER_TOKEN_OVERHEAD = 48
-_CONVERGENCE_ITERS = 6
-_CHARS_PER_TOKEN_ESTIMATE = 4
+_CHARS_PER_TOKEN_ESTIMATE = 3.2
+_TOKEN_WINDOW_GROWTH_LIMIT = 6
 
 
 def truncate_for_chars(text: str, max_chars: int) -> str:
@@ -47,8 +47,13 @@ def truncate_for_tokens(text: str, max_tokens: int) -> str:
         return ""
     if len(text) <= max_tokens:
         return text
-    # Every token is ≥1 char — if length ≤ budget, tokens ≤ budget.
-    if len(text) <= max_tokens * _CHARS_PER_TOKEN_ESTIMATE:
+    # Every token is >=1 char, so if length <= budget, tokens <= budget.
+    if len(text) <= max_tokens:
+        return text
+    # Only exact tokenizers can prove fit from a single count. Fallback counts
+    # are intentionally conservative estimates, so continue through truncation
+    # instead of returning an optimistic "fits" decision.
+    if not token_counts_are_estimated() and len(text) <= max_tokens * _CHARS_PER_TOKEN_ESTIMATE:
         if count_tokens(text) <= max_tokens:
             return text
 
@@ -78,37 +83,49 @@ def truncate_for_tokens(text: str, max_tokens: int) -> str:
 
 def _size_prefix_to_tokens(text: str, budget: int) -> str:
     """Slice text from start to the largest prefix that fits budget tokens."""
-    if budget <= 0 or not text:
-        return ""
-    size = min(len(text), budget * _CHARS_PER_TOKEN_ESTIMATE)
-    for _ in range(_CONVERGENCE_ITERS):
-        if size <= 0:
-            return ""
-        chunk = text[:size]
-        count = count_tokens(chunk)
-        if count <= budget:
-            return chunk
-        next_size = int(size * (budget / count) * 0.95)
-        if next_size >= size:
-            return text[:max(0, size - 1)]
-        size = next_size
-    return text[:max(0, size)]
+    size = _largest_fitting_edge_size(text, budget, from_end=False)
+    return text[:size]
 
 
 def _size_suffix_to_tokens(text: str, budget: int) -> str:
     """Slice text from end to the largest suffix that fits budget tokens."""
     if budget <= 0 or not text:
         return ""
-    size = min(len(text), budget * _CHARS_PER_TOKEN_ESTIMATE)
-    for _ in range(_CONVERGENCE_ITERS):
-        if size <= 0:
-            return ""
-        chunk = text[-size:]
-        count = count_tokens(chunk)
-        if count <= budget:
-            return chunk
-        next_size = int(size * (budget / count) * 0.95)
-        if next_size >= size:
-            return text[-max(0, size - 1):]
-        size = next_size
-    return text[-max(0, size):]
+    size = _largest_fitting_edge_size(text, budget, from_end=True)
+    return text[-size:] if size > 0 else ""
+
+
+def _largest_fitting_edge_size(text: str, budget: int, *, from_end: bool) -> int:
+    """Find the largest edge slice fitting a token budget.
+
+    The old damping loop could stop at the first under-budget slice and leave
+    budget unused. This bounded binary search grows a window until it brackets
+    the limit, then returns the largest slice that actually fits.
+    """
+    if budget <= 0 or not text:
+        return 0
+
+    high = min(len(text), max(1, int(budget * _CHARS_PER_TOKEN_ESTIMATE * 2)))
+    low = 0
+    growth_iters = 0
+    while growth_iters < _TOKEN_WINDOW_GROWTH_LIMIT and high < len(text):
+        chunk = text[-high:] if from_end else text[:high]
+        if count_tokens(chunk) > budget:
+            break
+        low = high
+        high = min(len(text), high * 2)
+        growth_iters += 1
+
+    if high == len(text):
+        chunk = text[-high:] if from_end else text[:high]
+        if count_tokens(chunk) <= budget:
+            return high
+
+    while low < high:
+        mid = (low + high + 1) // 2
+        chunk = text[-mid:] if from_end else text[:mid]
+        if count_tokens(chunk) <= budget:
+            low = mid
+        else:
+            high = mid - 1
+    return low

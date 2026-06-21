@@ -21,6 +21,7 @@ from archolith_filter.shrink import (
     truncate_read_file_for_chars,
     truncate_read_file_for_tokens,
 )
+from archolith_filter.shrink import token_counter as token_counter_module
 
 # ─── count_tokens ───
 
@@ -38,6 +39,13 @@ class TestCountTokens:
         short = count_tokens("hi")
         long = count_tokens("a" * 10000)
         assert long > short
+
+    def test_fallback_estimator_is_more_conservative_for_code(self):
+        code = "def run(value: int) -> int:\n    return value + 1\n"
+        prose = "This is a normal sentence with simple English words."
+
+        assert token_counter_module.estimate_tokens_fallback(code) > len(code) // 4
+        assert token_counter_module.estimate_tokens_fallback(prose) == len(prose) // 4
 
 
 # ─── truncate_for_chars ───
@@ -81,6 +89,17 @@ class TestTruncateForTokens:
         assert "truncated" in result
         # Should be significantly shorter than input
         assert len(result) < len(text)
+
+    def test_fallback_counts_do_not_return_optimistic_fit(self, monkeypatch):
+        import archolith_filter.shrink.truncate as truncate_module
+
+        text = "x" * 300
+        monkeypatch.setattr(truncate_module, "token_counts_are_estimated", lambda: True)
+        monkeypatch.setattr(truncate_module, "count_tokens", lambda chunk: max(1, len(chunk) // 4))
+
+        result = truncate_module.truncate_for_tokens(text, 100)
+
+        assert "truncated" in result
 
 
 # ─── truncate_read_file_for_chars ───
@@ -412,13 +431,22 @@ class TestEstimateConversationTokens:
     def test_counts_content(self):
         msgs = [ChatMessage(role="user", content="hello world")]
         n = estimate_conversation_tokens(msgs)
-        assert n > 0
+        assert n >= count_tokens("hello world") + 15
 
     def test_counts_tool_calls(self):
         call = ToolCall(id="1", function=ToolCallFunction(id="1", name="test", arguments='{"a": 1}'))
         msgs = [ChatMessage(role="assistant", content=None, tool_calls=[call])]
         n = estimate_conversation_tokens(msgs)
-        assert n > 0
+        assert n >= 15
+
+    def test_counts_per_message_framing_overhead(self):
+        one = estimate_conversation_tokens([ChatMessage(role="user", content="hello")])
+        two = estimate_conversation_tokens([
+            ChatMessage(role="user", content="hello"),
+            ChatMessage(role="assistant", content="world"),
+        ])
+
+        assert two >= one + 15
 
 
 # ─── estimate_request_tokens ───

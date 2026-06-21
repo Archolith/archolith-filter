@@ -159,6 +159,13 @@ class ShrinkTokensResult:
     chars_saved: int      # Characters recovered
 ```
 
+### Token Estimation Helpers
+
+- `count_tokens(text)` uses `tiktoken` `cl100k_base` when installed.
+- Without `tiktoken`, `estimate_tokens_fallback(text)` uses a shape-aware heuristic: prose keeps the historical ~4 chars/token estimate and code/config-like text uses ~3.2 chars/token.
+- `token_counts_are_estimated()` reports whether the fallback path is active.
+- `estimate_conversation_tokens(messages)` counts content, tool-call JSON, and a 15-token per-message framing estimate.
+
 ## Raw Output Store (`raw_store.py`)
 
 ### RawOutputEntry

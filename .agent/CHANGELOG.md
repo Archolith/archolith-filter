@@ -4,6 +4,13 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-06-20 — Token-count accuracy remediation (Session B)
+
+- **fix(shrink):** fallback token counting now uses a shape-aware heuristic: prose keeps the historical ~4 chars/token estimate, while code/config-like text uses a more conservative ~3.2 chars/token estimate and emits a one-time warning when `tiktoken` is unavailable.
+- **fix(truncate):** token truncation no longer accepts a single fallback estimate as proof that text fits; edge-window sizing now uses bounded binary search to avoid the previous early-exit underfill from damped convergence.
+- **fix(accounting):** `estimate_conversation_tokens()` now includes a 15-token per-message framing estimate so callers do not undercount chat-template overhead.
+- **docs:** README, `.env.example`, and architecture/data-model docs updated to describe the fallback and Layer 3 agent-solo surface accurately.
+
 ## 2026-06-19 — Audit remediation (High tier)
 
 Closed the surviving High findings from the 2026-06-07 chunk audits (re-verified against current code; 2 of 7 were already remediated).
