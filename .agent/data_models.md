@@ -1,4 +1,4 @@
-# archolith-rtk — Data Models
+# archolith-filter — Data Models
 
 ## Core Data Classes
 
@@ -159,6 +159,13 @@ class ShrinkTokensResult:
     chars_saved: int      # Characters recovered
 ```
 
+### Token Estimation Helpers
+
+- `count_tokens(text)` delegates tokenizer selection and fallback policy to `archolith-maintenance`.
+- With `tiktoken` available, the shared helper counts `cl100k_base` tokens. Without `tiktoken`, `estimate_tokens_fallback(text)` uses the shared shape-aware heuristic: prose keeps the historical ~4 chars/token estimate and code/config-like text uses ~3.2 chars/token.
+- `token_counts_are_estimated()` reports whether the fallback path is active.
+- `estimate_conversation_tokens(messages)` counts content, tool-call JSON, and a 15-token per-message framing estimate.
+
 ## Raw Output Store (`raw_store.py`)
 
 ### RawOutputEntry
@@ -225,7 +232,7 @@ class FilterTelemetrySummary:
 |------|----------|--------|
 | `CommandCategory` | `classifier.py` | 13 categories (see above) |
 
-`read_file` is routed as a tool-specific category string in `archolith_rtk.__init__`,
+`read_file` is routed as a tool-specific category string in `archolith_filter.__init__`,
 not as a `CommandCategory` enum value, because it is classified from tool name
 rather than from shell command text.
 

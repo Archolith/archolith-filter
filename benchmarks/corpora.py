@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from archolith_rtk import ChatMessage, ToolCall
-from archolith_rtk.shrink import ToolCallFunction
+from archolith_filter import ChatMessage, ToolCall
+from archolith_filter.shrink import ToolCallFunction
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -46,7 +46,7 @@ def get_nested_json_large_text() -> str:
     payload = {
         "metadata": {
             "request_id": "req_bench_001",
-            "agent": "archolith-rtk-benchmark",
+            "agent": "archolith-filter-benchmark",
             "labels": ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"],
         },
         "files": [
@@ -297,7 +297,7 @@ def get_nested_json_dotted_text() -> str:
 
     obj = {
         "service": {
-            "name": "archolith-rtk",
+            "name": "archolith-filter",
             "version": "1.2.3",
             "config": {
                 "max_tokens": 4096,

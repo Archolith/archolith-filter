@@ -1,16 +1,13 @@
-"""Tests for archolith_rtk.agent_solo — agent-solo turn compression."""
+"""Tests for archolith_filter.agent_solo — agent-solo turn compression."""
 
-import pytest
 
-from archolith_rtk.agent_solo import (
-    AgentSoloResult,
+from archolith_filter.agent_solo import (
     AgentSoloStats,
     _is_compressible_tool,
     _split_sections,
     compress_agent_solo_turn,
 )
-from archolith_rtk.dedupe import DedupeTracker
-
+from archolith_filter.dedupe import DedupeTracker
 
 # ─── Helpers ───
 
@@ -121,42 +118,103 @@ class TestShrinkStrategy:
 
 
 class TestDedupStrategy:
-    def test_dedup_replaces_repeated_content(self):
+    def test_payload_scoped_keep_newest_two_occurrences(self):
+        """Two identical >=200-char tool contents in same payload.
+        Earlier should be markered, later should be intact, chars_saved correct."""
         content = "a" * 500
-        tracker = DedupeTracker()
+        messages = [
+            _user_msg(),
+            _tool_msg(content, name="bash"),
+            _user_msg(),
+            _tool_msg(content, name="bash"),  # identical, later occurrence
+        ]
+        result = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert result.stats.chars_saved_dedup > 0
+        assert "dedup" in result.stats.strategies_applied
+        # Earlier (index 1) should be markered
+        assert "superseded" in result.messages[1]["content"].lower()
+        # Later (index 3) should be intact
+        assert result.messages[3]["content"] == content
 
-        # First turn — records hashes
-        msgs1 = [_user_msg(), _tool_msg(content)]
-        r1 = compress_agent_solo_turn(
-            msgs1, dedup_tracker=tracker, dedup_enabled=True,
-        )
-        assert r1.stats.chars_saved_dedup == 0  # first time, no savings
+    def test_payload_scoped_keep_newest_three_occurrences(self):
+        """Three identical contents: first two markered, newest intact."""
+        content = "b" * 500
+        messages = [
+            _tool_msg(content),
+            _user_msg(),
+            _tool_msg(content),
+            _user_msg(),
+            _tool_msg(content),  # newest
+        ]
+        result = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert result.stats.chars_saved_dedup > 0
+        # Indices 0 and 2 markered, index 4 intact
+        assert "superseded" in result.messages[0]["content"].lower()
+        assert "superseded" in result.messages[2]["content"].lower()
+        assert result.messages[4]["content"] == content
 
-        # Second turn — same content should be deduped
-        msgs2 = [_user_msg(), _tool_msg(content)]
-        r2 = compress_agent_solo_turn(
-            msgs2, dedup_tracker=tracker, dedup_enabled=True,
+    def test_tail_guard_newest_in_tail(self):
+        """Newest occurrence is in tail — middle should still be markered."""
+        content = "c" * 500
+        messages = [
+            _system_msg(),
+            _user_msg(), _assistant_msg(),
+            _tool_msg(content, name="bash"),  # middle
+            _user_msg(), _assistant_msg(),
+            _tool_msg(content),  # in tail (last 3 messages)
+        ]
+        result = compress_agent_solo_turn(
+            messages,
+            dedup_enabled=True,
+            coherence_tail_size=3,
         )
-        assert r2.stats.chars_saved_dedup > 0
-        assert "dedup" in r2.stats.strategies_applied
-        assert "identical" in r2.messages[1]["content"].lower()
+        # Middle copy (index 3) should be markered because newest is in tail
+        assert "superseded" in result.messages[3]["content"].lower()
+        # Tail copy (index 6) should be intact
+        assert result.messages[6]["content"] == content
+
+    def test_cross_request_regression_no_remarket(self):
+        """Single occurrence in a payload should NEVER be markered.
+        Regression test for doom-loop: same payload re-sent in next request
+        was getting markered on second call with shared tracker."""
+        content = "d" * 500
+        messages = [_user_msg(), _tool_msg(content)]
+
+        # First call — single occurrence, no marking
+        r1 = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert r1.stats.chars_saved_dedup == 0
+        assert r1.messages[1]["content"] == content
+
+        # Second call — SAME payload re-sent. With payload-scoped dedup,
+        # still single occurrence in THIS payload, should not be markered.
+        r2 = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert r2.stats.chars_saved_dedup == 0
+        assert r2.messages[1]["content"] == content
 
     def test_dedup_skips_small_content(self):
-        tracker = DedupeTracker()
-        messages = [_user_msg(), _tool_msg("tiny")]
-        # First pass
-        compress_agent_solo_turn(messages, dedup_tracker=tracker, dedup_enabled=True)
-        # Second pass
-        r = compress_agent_solo_turn(messages, dedup_tracker=tracker, dedup_enabled=True)
-        assert r.stats.chars_saved_dedup == 0  # too small to dedup
+        """Content below 200 chars is never deduped."""
+        messages = [
+            _user_msg(),
+            _tool_msg("tiny"),
+            _user_msg(),
+            _tool_msg("tiny"),  # identical but <200 chars
+        ]
+        result = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert result.stats.chars_saved_dedup == 0
+        # Both should be unchanged
+        assert result.messages[1]["content"] == "tiny"
+        assert result.messages[3]["content"] == "tiny"
 
     def test_dedup_different_content_not_replaced(self):
-        tracker = DedupeTracker()
-        msgs1 = [_user_msg(), _tool_msg("a" * 500)]
-        compress_agent_solo_turn(msgs1, dedup_tracker=tracker, dedup_enabled=True)
-        msgs2 = [_user_msg(), _tool_msg("b" * 500)]
-        r = compress_agent_solo_turn(msgs2, dedup_tracker=tracker, dedup_enabled=True)
-        assert r.stats.chars_saved_dedup == 0
+        """Different content is never markered."""
+        messages = [
+            _user_msg(),
+            _tool_msg("a" * 500),
+            _user_msg(),
+            _tool_msg("b" * 500),
+        ]
+        result = compress_agent_solo_turn(messages, dedup_enabled=True)
+        assert result.stats.chars_saved_dedup == 0
 
 
 # ─── Strategy C: Filter middle ───
@@ -257,3 +315,118 @@ class TestOrchestrator:
         assert result.messages[0]["content"] == "sys"
         assert result.messages[1]["content"] == "hi"
         assert result.messages[2]["content"] == "bye"
+
+
+# ─── Strategy A tail-guard (AI-C1) ────────────────────────────────────────
+
+
+class TestShrinkTailGuard:
+    """AI-C1: Strategy A's shrink pass must not truncate the coherence tail,
+    mirroring the tail-guard Strategy B already had."""
+
+    def test_shrink_skips_last_n_tool_messages(self):
+        """With 5 large tool messages and coherence_tail_size=2, the last 2
+        tool messages must be intact; the earlier 3 must be truncated."""
+        large = "x" * 2000
+        messages = [
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+        ]
+        result = compress_agent_solo_turn(
+            messages,
+            shrink_enabled=True,
+            shrink_max_tokens=100,  # max_chars ~= 400
+            coherence_tail_size=2,
+        )
+        # Earlier 3 tool messages SHOULD be truncated.
+        for idx in (0, 1, 2):
+            assert len(result.messages[idx]["content"]) < 2000, (
+                f"middle tool message at idx {idx} should be truncated"
+            )
+        # Last 2 tool messages (the tail) should be intact.
+        for idx in (3, 4):
+            assert result.messages[idx]["content"] == large, (
+                f"tail tool message at idx {idx} should be preserved verbatim"
+            )
+        # The shrink strategy did save chars from the middle.
+        assert result.stats.chars_saved_shrink > 0
+        assert "shrink" in result.stats.strategies_applied
+
+    def test_shrink_no_tail_guard_when_too_few_messages(self):
+        """When messages are too few to form a middle section, ``_split_sections``
+        returns ``(system, [], rest)`` and middle is empty — the orchestrator
+        sets ``tail_start_index=None`` (no boundary to compute). With no tail
+        guard, shrink still applies. This matches the existing semantics for
+        Strategy B (dedup with no middle) and the direct-API default of
+        ``_apply_shrink(messages, max_tokens=X)``."""
+        large = "y" * 2000
+        messages = [_tool_msg(large, name="bash")]
+        result = compress_agent_solo_turn(
+            messages,
+            shrink_enabled=True,
+            shrink_max_tokens=100,
+            coherence_tail_size=2,  # >len(messages), so no middle -> no tail boundary
+        )
+        # No middle -> tail_start_index=None -> shrink applies unguarded.
+        assert len(result.messages[0]["content"]) < 2000
+        assert result.stats.chars_saved_shrink > 0
+
+    def test_shrink_default_tail_index_none_truncates_all(self):
+        """Direct call to _apply_shrink with the default tail_start_index=None
+        truncates all tool messages (backward-compatible behavior for direct
+        API callers who don't compute a tail)."""
+        from archolith_filter.agent_solo import _apply_shrink
+
+        large = "z" * 2000
+        messages = [_tool_msg(large, name="bash"), _tool_msg(large, name="bash")]
+        result, saved = _apply_shrink(messages, max_tokens=100)
+        # Both messages truncated.
+        assert len(result[0]["content"]) < 2000
+        assert len(result[1]["content"]) < 2000
+        assert saved > 0
+
+    def test_shrink_explicit_tail_index_protects_tail(self):
+        """Direct call: tail_start_index=1 protects index >=1, truncates <1."""
+        from archolith_filter.agent_solo import _apply_shrink
+
+        large = "q" * 2000
+        messages = [
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+        ]
+        result, saved = _apply_shrink(messages, max_tokens=100, tail_start_index=1)
+        # Index 0 truncated, indices 1 and 2 protected.
+        assert len(result[0]["content"]) < 2000
+        assert result[1]["content"] == large
+        assert result[2]["content"] == large
+        assert saved > 0
+
+    def test_shrink_tail_guard_with_system_prefix(self):
+        """When a system message precedes the tool messages, the tail index
+        is correctly offset to account for the system prefix."""
+        large = "w" * 2000
+        messages = [
+            _system_msg(),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+            _tool_msg(large, name="bash"),
+        ]
+        result = compress_agent_solo_turn(
+            messages,
+            shrink_enabled=True,
+            shrink_max_tokens=100,
+            coherence_tail_size=2,
+        )
+        # system (idx 0) is unchanged; middle tools (idx 1-3) truncated.
+        assert result.messages[0]["content"] == "you are helpful"
+        for idx in (1, 2, 3):
+            assert len(result.messages[idx]["content"]) < 2000
+        # Tail tools (idx 4-5) intact.
+        for idx in (4, 5):
+            assert result.messages[idx]["content"] == large

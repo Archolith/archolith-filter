@@ -1,4 +1,4 @@
-# GitHub Copilot Instructions — archolith-rtk
+# GitHub Copilot Instructions — archolith-filter
 
 Before suggesting or generating code, read all files in the `.agent/` directory.
 

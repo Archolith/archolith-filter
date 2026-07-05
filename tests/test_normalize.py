@@ -1,6 +1,6 @@
-"""Tests for archolith_rtk.normalize — runtime noise normalization."""
+"""Tests for archolith_filter.normalize — runtime noise normalization."""
 
-from archolith_rtk.normalize import normalize_runtime_noise
+from archolith_filter.normalize import normalize_runtime_noise
 
 
 class TestTimestampNormalization:

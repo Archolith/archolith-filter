@@ -1,4 +1,4 @@
-# archolith-rtk — Agent Docs
+# archolith-filter — Agent Docs
 
 Read everything in this directory before starting work.
 

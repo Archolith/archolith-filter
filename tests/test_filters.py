@@ -1,48 +1,36 @@
-"""Tests for archolith_rtk — Phase 1 core filters."""
+"""Tests for archolith_filter — Phase 1 core filters."""
 
 import json
 
 import pytest
 
-from archolith_rtk import filter_output
-from archolith_rtk.classifier import CommandCategory, classify_command
-from archolith_rtk.config import (
+from archolith_filter import filter_output
+from archolith_filter.classifier import CommandCategory, classify_command
+from archolith_filter.config import (
     FilterRiskLevel,
     base_config_for_risk_level,
     from_env,
     is_verbose_command,
 )
-from archolith_rtk.dedupe import reset_dedupe_tracker
-from archolith_rtk.filter_meta import parse_result_meta
-from archolith_rtk.filters.build_output import BuildFilterOptions, build_filter
-from archolith_rtk.filters.fs_listing import FsListingFilterOptions, fs_listing_filter
-from archolith_rtk.filters.generic import GenericFilterOptions, generic_filter
-from archolith_rtk.filters.git_diff import GitDiffFilterOptions, git_diff_filter
-from archolith_rtk.filters.git_log import git_log_filter
-from archolith_rtk.filters.git_show import git_show_filter
-from archolith_rtk.filters.git_status import GitStatusFilterOptions, git_status_filter
-from archolith_rtk.filters.json_output import JsonFilterOptions, json_filter
-from archolith_rtk.filters.lint_output import lint_filter
-from archolith_rtk.filters.logs import LogFilterOptions, log_filter
-from archolith_rtk.filters.read_file import ReadFileFilterOptions, read_file_filter
-from archolith_rtk.filters.search import SearchFilterOptions, search_filter
-from archolith_rtk.filters.test_run_output import filter_test_output
-from archolith_rtk.filters.typecheck_output import typecheck_filter
-from archolith_rtk.raw_store import RawOutputStore, get_raw_output_store, reset_raw_output_store
-from archolith_rtk.strip_ansi import strip_ansi
-from archolith_rtk.telemetry import get_filter_telemetry_store, reset_filter_telemetry_store
-
-
-@pytest.fixture(autouse=True)
-def _reset_stores():
-    """Reset singleton stores between tests."""
-    reset_raw_output_store()
-    reset_filter_telemetry_store()
-    reset_dedupe_tracker()
-    yield
-    reset_raw_output_store()
-    reset_filter_telemetry_store()
-    reset_dedupe_tracker()
+from archolith_filter.filter_meta import parse_result_meta
+from archolith_filter.filters import FilterResult
+from archolith_filter.filters.build_output import BuildFilterOptions, build_filter
+from archolith_filter.filters.fs_listing import FsListingFilterOptions, fs_listing_filter
+from archolith_filter.filters.generic import GenericFilterOptions, generic_filter
+from archolith_filter.filters.git_diff import GitDiffFilterOptions, git_diff_filter
+from archolith_filter.filters.git_log import git_log_filter
+from archolith_filter.filters.git_show import git_show_filter
+from archolith_filter.filters.git_status import GitStatusFilterOptions, git_status_filter
+from archolith_filter.filters.json_output import JsonFilterOptions, json_filter
+from archolith_filter.filters.lint_output import lint_filter
+from archolith_filter.filters.logs import LogFilterOptions, log_filter
+from archolith_filter.filters.read_file import ReadFileFilterOptions, read_file_filter
+from archolith_filter.filters.search import SearchFilterOptions, search_filter
+from archolith_filter.filters.test_run_output import filter_test_output
+from archolith_filter.filters.typecheck_output import typecheck_filter
+from archolith_filter.raw_store import RawOutputStore, get_raw_output_store
+from archolith_filter.strip_ansi import strip_ansi
+from archolith_filter.telemetry import get_filter_telemetry_store
 
 
 # ─── strip_ansi ───
@@ -148,21 +136,21 @@ class TestFilterConfig:
         assert low.json_max_value_length > balanced.json_max_value_length > high.json_max_value_length
 
     def test_env_risk_level_high_changes_defaults(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_RISK_LEVEL", "high")
+        monkeypatch.setenv("ARCHOLITH_FILTER_RISK_LEVEL", "high")
         cfg = from_env()
         assert cfg.risk_level == FilterRiskLevel.HIGH
         assert cfg.generic_head == 10
         assert cfg.search_max_matches_per_file == 3
 
     def test_invalid_env_risk_level_falls_back_to_balanced(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_RISK_LEVEL", "extreme")
+        monkeypatch.setenv("ARCHOLITH_FILTER_RISK_LEVEL", "extreme")
         cfg = from_env()
         assert cfg.risk_level == FilterRiskLevel.BALANCED
         assert cfg.generic_head == 20
 
     def test_explicit_env_override_wins_over_risk_level(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_RISK_LEVEL", "high")
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTER_GENERIC_HEAD", "42")
+        monkeypatch.setenv("ARCHOLITH_FILTER_RISK_LEVEL", "high")
+        monkeypatch.setenv("ARCHOLITH_FILTER_GENERIC_HEAD", "42")
         cfg = from_env()
         assert cfg.risk_level == FilterRiskLevel.HIGH
         assert cfg.generic_head == 42
@@ -340,8 +328,11 @@ class TestJsonFilter:
 
     def test_invalid_json_falls_to_generic(self):
         text = "$ some-cmd\n[exit 0]\nnot valid json at all\n" + "line\n" * 100
-        json_filter(text)
+        r = json_filter(text)
         # Should not crash — falls through to generic
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── search filter ───
@@ -464,8 +455,11 @@ class TestFsListingFilter:
 class TestSimpleFilters:
     def test_test_filter_delegates(self):
         text = "$ pytest\n[exit 0]\n" + "\n".join(f"test_{i} PASSED" for i in range(100))
-        filter_test_output(text)
+        r = filter_test_output(text)
         # Should not crash — delegates to generic with test defaults
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_build_filter_delegates(self):
         text = "$ gradle build\n[exit 0]\n" + "compiling...\n" * 100
@@ -639,7 +633,7 @@ class TestCompoundLiteralType:
 
     @pytest.fixture
     def _clf(self):
-        from archolith_rtk.filters.read_file import _compound_literal_type
+        from archolith_filter.filters.read_file import _compound_literal_type
 
         return _compound_literal_type
 
@@ -688,7 +682,7 @@ class TestCompoundLiteralType:
 
 class TestFilterOutput:
     def test_disabled_returns_text(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTERS", "off")
+        monkeypatch.setenv("ARCHOLITH_FILTERS", "off")
         text = "x" * 1000
         r = filter_output(text, command="cat bigfile.txt")
         assert not r.truncated
@@ -739,7 +733,7 @@ class TestFilterOutput:
         def boom(*args, **kwargs):
             raise RuntimeError("broken")
 
-        monkeypatch.setattr("archolith_rtk._category_filter", boom)
+        monkeypatch.setattr("archolith_filter._category_filter", boom)
         r = filter_output(text, command="echo verbose")
         assert not r.truncated
         assert "\x1b" not in r.output
@@ -748,29 +742,29 @@ class TestFilterOutput:
 
 class TestToolClassification:
     def test_classify_passthrough_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("raw_output", "payload") == "passthrough"
+        assert archolith_filter._classify_tool("raw_output", "payload") == "passthrough"
 
     def test_classify_shell_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("run_command", "payload") == "shell"
+        assert archolith_filter._classify_tool("run_command", "payload") == "shell"
 
     def test_classify_read_file_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("read_file", "payload") == "read_file"
+        assert archolith_filter._classify_tool("read_file", "payload") == "read_file"
 
     def test_classify_mcp_json_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("mcp__memory__query", '{"items": []}') == "json"
+        assert archolith_filter._classify_tool("mcp__memory__query", '{"items": []}') == "json"
 
     def test_classify_unknown_tool(self):
-        import archolith_rtk
+        import archolith_filter
 
-        assert archolith_rtk._classify_tool("custom_tool", "payload") == "generic"
+        assert archolith_filter._classify_tool("custom_tool", "payload") == "generic"
 
 
 # ─── raw output store ───
@@ -814,7 +808,7 @@ class TestRawOutputStore:
 
 class TestTelemetry:
     def test_record_and_summary(self):
-        from archolith_rtk.telemetry import record_filter_telemetry
+        from archolith_filter.telemetry import record_filter_telemetry
 
         record_filter_telemetry(
             command="git diff",
@@ -831,7 +825,7 @@ class TestTelemetry:
         assert summary.average_savings_pct == 80
 
     def test_format_summary(self):
-        from archolith_rtk.telemetry import record_filter_telemetry
+        from archolith_filter.telemetry import record_filter_telemetry
 
         record_filter_telemetry(
             command="test",
@@ -925,7 +919,7 @@ class TestCrossTurnDedupe:
         assert r2.truncated
 
     def test_filtering_disabled_no_dedupe(self, monkeypatch):
-        monkeypatch.setenv("ARCHOLITH_RTK_FILTERS", "off")
+        monkeypatch.setenv("ARCHOLITH_FILTERS", "off")
         text = "x" * 1000
         filter_output(text, command="echo")
         r2 = filter_output(text, command="echo")
@@ -939,7 +933,7 @@ class TestCrossTurnDedupe:
         assert "repeated output" in r2.output
 
     def test_dedupe_tracker_unit(self):
-        from archolith_rtk.dedupe import DedupeTracker
+        from archolith_filter.dedupe import DedupeTracker
 
         tracker = DedupeTracker()
         assert tracker.check("hello") is None
@@ -975,6 +969,9 @@ class TestCsvStrategy:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
         # Only 2 items, below min_rows=3 — should fall back
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_mixed_keys_still_tabular(self):
         """Sparse objects with optional keys are still tabular if 60% overlap."""
@@ -990,6 +987,9 @@ class TestCsvStrategy:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
         # Nested dicts don't qualify for CSV
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_csv_row_limit(self):
         data = [{"id": i, "name": f"item_{i}"} for i in range(50)]
@@ -1026,12 +1026,18 @@ class TestKvStrategy:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(kv_enabled=True, kv_min_keys=3))
         # Only 2 keys, below min_keys — should fall back
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_nested_values_skip_kv(self):
         data = {"name": "test", "config": {"nested": True}, "count": 5}
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(kv_enabled=True, kv_min_keys=3))
         # Nested dict should use dotted-key, not KV
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_key_limit(self):
         data = {f"key_{i}": f"value_{i}" for i in range(30)}
@@ -1055,12 +1061,18 @@ class TestDotkeyStrategy:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(dotkey_enabled=True, dotkey_max_depth=3))
         # Depth 4 exceeds max_depth of 3
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_arrays_in_values_skip_dotkey(self):
         data = {"items": [1, 2, 3], "name": "test"}
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(dotkey_enabled=True))
         # Arrays are not dottable — falls back
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 5: Stack trace collapsing ───
@@ -1092,6 +1104,9 @@ class TestStackTraceCollapse:
         # Only 3 frames, below min_frames=5
         r = generic_filter(text, GenericFilterOptions(stack_collapse_enabled=True, stack_collapse_min_frames=5))
         # Should not collapse — below min_frames threshold
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 6: Git status grouping ───
@@ -1118,11 +1133,17 @@ class TestGitStatusGrouping:
         text = "$ git status -s\n[exit 0]\n" + "\n".join(lines)
         r = git_status_filter(text, GitStatusFilterOptions(group_enabled=False))
         # Should fall through to generic filter
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_non_short_format_skips_grouping(self):
         text = "$ git status\n[exit 0]\nOn branch main\nChanges to be committed:\n  modified: foo.ts"
         r = git_status_filter(text, GitStatusFilterOptions(group_enabled=True))
         # Long-format should fall through to generic
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 7: Search heading reformat ───
@@ -1144,6 +1165,9 @@ class TestSearchHeadingReformat:
         text = "$ rg --heading pattern\nsrc/auth/handler.ts:\n5:pattern match\n6:another match"
         r = search_filter(text, SearchFilterOptions(heading_reformat_enabled=True))
         # Already heading-style — should not double-convert
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 8: Build task summary ───
@@ -1178,6 +1202,9 @@ class TestBuildSummary:
         # Non-zero exit — filter_output bypasses
         r = filter_output(text, command="gradle build", exit_code=1)
         # Should not summarize failed builds
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
     def test_summary_disabled(self):
         lines = [
@@ -1189,6 +1216,9 @@ class TestBuildSummary:
         text = "$ gradle build\n[exit 0]\n" + "\n".join(lines)
         r = build_filter(text, BuildFilterOptions(summary_enabled=False))
         # Falls back to generic — should still work
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 # ─── Strategy 9: ls -la abbreviation ───
@@ -1286,24 +1316,27 @@ class TestCsvEdgeCases:
         text = json.dumps(data)
         r = json_filter(text, JsonFilterOptions(csv_enabled=True, csv_min_rows=3))
         # Should fall through since min_rows=3 not met
+        assert isinstance(r, FilterResult)
+        assert isinstance(r.output, str)
+        assert r.raw_chars > 0
 
 
 class TestDotkeyEdgeCases:
     def test_depth_4_rejected(self):
         """4 levels of nesting should be rejected at max_depth=3."""
-        from archolith_rtk.filters.json_output import _is_dottable
+        from archolith_filter.filters.json_output import _is_dottable
         data = {"a": {"b": {"c": {"d": 1}}}}
         assert not _is_dottable(data, max_depth=3)
 
     def test_depth_3_accepted(self):
         """3 levels of nesting should be accepted at max_depth=3."""
-        from archolith_rtk.filters.json_output import _is_dottable
+        from archolith_filter.filters.json_output import _is_dottable
         data = {"a": {"b": {"c": 1}}}
         assert _is_dottable(data, max_depth=3)
 
     def test_array_values_not_dottable(self):
         """Objects with array values should not be dottable."""
-        from archolith_rtk.filters.json_output import _is_dottable
+        from archolith_filter.filters.json_output import _is_dottable
         data = {"items": [1, 2, 3], "name": "test"}
         assert not _is_dottable(data, max_depth=3)
 
@@ -1368,3 +1401,41 @@ class TestBuildEdgeCases:
         text = "$ gradle build\n[exit 0]\n" + "\n".join(lines)
         r = build_filter(text, BuildFilterOptions(summary_enabled=True))
         assert "warning" in r.output.lower()
+
+
+# ─── filter_output dedupe_tracker parameter ───
+
+
+class TestFilterOutputDedupTracker:
+    def test_fresh_tracker_per_call_no_cross_request_marking(self):
+        """With a fresh tracker per call, same string on two calls is not markered."""
+        from archolith_filter.dedupe import DedupeTracker
+
+        content = "x" * 1000  # large enough to trigger dedupe (>= 500 chars for filter)
+
+        # First call with fresh tracker
+        r1 = filter_output(content, tool="bash", dedupe_tracker=DedupeTracker())
+        assert "repeated" not in r1.output.lower()
+
+        # Second call with ANOTHER fresh tracker
+        # (same content, but tracker doesn't know about first call)
+        r2 = filter_output(content, tool="bash", dedupe_tracker=DedupeTracker())
+        assert "repeated" not in r2.output.lower()
+
+    def test_shared_tracker_cross_call_marking(self):
+        """With a persistent/shared tracker, second identical call IS markered."""
+        from archolith_filter.dedupe import DedupeTracker, reset_dedupe_tracker
+
+        content = "y" * 1000
+        shared_tracker = DedupeTracker()
+
+        # Reset global tracker to ensure clean state
+        reset_dedupe_tracker()
+
+        # First call with shared tracker
+        r1 = filter_output(content, tool="bash", dedupe_tracker=shared_tracker)
+        assert "repeated" not in r1.output.lower()
+
+        # Second call with SAME shared tracker
+        r2 = filter_output(content, tool="bash", dedupe_tracker=shared_tracker)
+        assert "repeated" in r2.output.lower()

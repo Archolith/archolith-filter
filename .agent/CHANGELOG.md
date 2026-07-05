@@ -1,4 +1,38 @@
-# Changelog — archolith-rtk
+# Changelog — archolith-filter
+
+## Historical Context
+
+**RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
+
+## 2026-06-21 — Shared Token Accounting Dependency
+
+- **refactor(shrink):** `shrink.token_counter` now delegates tokenizer selection and fallback token-count policy to `archolith-maintenance`.
+- **packaging:** Added `archolith-maintenance` as the shared helper dependency for canonical token accounting.
+
+## 2026-06-20 — Token-count accuracy remediation (Session B)
+
+- **fix(shrink):** fallback token counting now uses a shape-aware heuristic: prose keeps the historical ~4 chars/token estimate, while code/config-like text uses a more conservative ~3.2 chars/token estimate and emits a one-time warning when `tiktoken` is unavailable.
+- **fix(truncate):** token truncation no longer accepts a single fallback estimate as proof that text fits; edge-window sizing now uses bounded binary search to avoid the previous early-exit underfill from damped convergence.
+- **fix(accounting):** `estimate_conversation_tokens()` now includes a 15-token per-message framing estimate so callers do not undercount chat-template overhead.
+- **docs:** README, `.env.example`, and architecture/data-model docs updated to describe the fallback and Layer 3 agent-solo surface accurately.
+
+## 2026-06-19 — Audit remediation (High tier)
+
+Closed the surviving High findings from the 2026-06-07 chunk audits (re-verified against current code; 2 of 7 were already remediated).
+
+- **fix(logs):** log header extraction now uses `generic._extract_header`, fixing `[exit N]`/`[killed]` headers previously treated as body (chunk6 H-2).
+- **fix(redact):** connection-string redaction targets only the `user:pass` credential, preserving scheme/host/database/query for diagnostics; handles empty-username form (chunk8 H1).
+- **refactor(_patterns):** added shared `LINE_COMMENT_RE` / `is_line_comment()`; `read_file.py` no longer shadows it locally (chunk6 H-1).
+- **refactor(shrink):** extracted `_collapse_imports_and_comments()` shared by char/token read_file truncators, removing duplicated logic (chunk7 F-04).
+- **Deferred:** chunk6 H-3 (json_output perf) — the audit's minified-JSON lower-bound heuristic is unsound because `_compress_value` truncates long strings and can be shorter than minified JSON; deferred pending a sound approach. All Medium/Low findings deferred per launch posture.
+- **Verification:** `pytest` 341 passed / 1 skipped; `ruff check` clean on touched files.
+
+## 2026-06-02 — Layer 0 pre-filter pipeline wiring
+
+- **Layer 0 pipeline**: Wired `redact_secrets()`, `strip_thinking_blocks()`, and `normalize_paths()` into `filter_output()` with per-stage config gating. Added binary detection (NUL-byte scan, early return at <10% text ratio), oversized input guard (500KB default threshold, head/tail preview), and table whitespace minimization in `fs_listing_filter()`.
+- **Runtime noise normalization**: `normalize_runtime_noise()` now called inside `log_filter()`, `build_filter()`, and `filter_test_output()` to replace timestamps/PIDs/elapsed times with stable placeholders.
+- **9 new config knobs**: `REDACT_ENABLED`, `BINARY_DETECTION_ENABLED`, `OVERSIZED_GUARD_ENABLED`, `OVERSIZED_MAX_CHARS`, `STRIP_THINKING_ENABLED`, `NORMALIZE_PATHS_ENABLED`, `NORMALIZE_NOISE_ENABLED`, `TABLE_WHITESPACE_MIN_ENABLED` — all toggleable via `ARCHOLITH_FILTER_*` env vars.
+- **Verification gates pass**: `ruff check archolith_filter` (0 errors in package code), `pytest tests/` (335/335), `benchmarks/practical_report.py` (all scenarios and acceptance checks pass).
 
 ## 2026-06-02 — format-switch benchmark coverage (Step 12)
 
@@ -8,6 +42,9 @@
 - Fixed `checks_passed` logic to correctly handle small corpora that pass through unchanged at low/balanced risk.
 - Enlarged Python stack trace, dotted-key JSON, and build corpora to ensure meaningful compression at all risk levels.
 - All format-switch scenarios now pass practical benchmark with `--exit-0`.
+- Fixed the truncation-only baseline to disable every format-switch knob it was meant to compare against, including stack collapse, git-status grouping, build summaries, and `ls -la` abbreviation.
+- Added aggregate baseline gates so Step 12 now proves material improvement at every preset: `+1175` low, `+1252` balanced, `+1296` high, `+3723` overall versus truncation-only.
+- Fixed no-op `agent_solo` orchestration so unchanged turns preserve identity and still report `no_strategies_enabled`, which restores a clean full pytest run for the plan verification set.
 
 ## 2026-06-02 — format-switch compression (Strategies 1-9)
 
@@ -38,7 +75,7 @@
 
 ## 2026-05-31 — completed quality remediation closeout
 
-- Committed the missing `normalize.py`, `paths.py`, `redact.py`, and `strip_thinking.py` modules that the trimmed public API already referenced, eliminating the detached-review import failure in `archolith_rtk.__init__`.
+- Committed the missing `normalize.py`, `paths.py`, `redact.py`, and `strip_thinking.py` modules that the trimmed public API already referenced, eliminating the detached-review import failure in `archolith_filter.__init__`.
 - Committed focused regression coverage for runtime-noise normalization, path normalization, secret redaction, and thinking-block stripping so the new public helpers are exercised directly.
 - Re-ran the full pytest suite (`293 passed, 1 skipped`) plus the targeted compound-literal regression subset (`13 passed`) to confirm the remediation plan now lands as a runnable work product rather than untracked drift.
 
@@ -62,7 +99,7 @@
 
 ## 2026-05-24 — removed Layer 3 suite surface from RTK
 
-- Removed `context_manager.py` and its public exports so `archolith-rtk` now owns only Layer 1 filtering, Layer 2 shrinking, and shared token/truncation primitives.
+- Removed `context_manager.py` and its public exports so `archolith-filter` now owns only Layer 1 filtering, Layer 2 shrinking, and shared token/truncation primitives.
 - Removed Layer 3 tests and benchmark coverage, including the context-fold scenario from the practical benchmark report.
 - Updated README, root changelog, and agent docs to describe `archolith-context` as the owner of conversation-level context strategy.
 
@@ -91,7 +128,7 @@
 ## 2026-05-24 — added configurable compression risk levels
 
 - Added `FilterRiskLevel` presets (`low`, `balanced`, `high`) and `base_config_for_risk_level()` so callers can pick a token-savings/data-loss posture explicitly.
-- Added `ARCHOLITH_RTK_FILTER_RISK_LEVEL` support in `from_env()`, with explicit env overrides still taking precedence over the selected preset.
+- Added `ARCHOLITH_FILTER_RISK_LEVEL` support in `from_env()`, with explicit env overrides still taking precedence over the selected preset.
 - Added regression coverage and README/docs updates for the new risk-level behavior.
 
 ## 2026-05-24 — added practical token-efficiency benchmark reporting

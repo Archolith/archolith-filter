@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "archolith-rtk"
+name = "archolith-filter"
 version = "0.1.0"
 description = "Token Reduction Toolkit — deterministic output filtering for LLM agent contexts"
 readme = "README.md"
@@ -14,7 +14,10 @@ keywords = ["llm", "token-reduction", "output-filtering", "agent"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: Other/Proprietary License",
+    # Note: "License :: Other/Proprietary License" classifier removed (deprecated).
+    # The project uses a custom PolyForm Noncommercial license; the
+    # `license = "LicenseRef-PolyForm-Noncommercial-1.0.0"` field above is
+    # the canonical declaration.
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -22,11 +25,13 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    "archolith-maintenance>=0.1.0",
+]
 
 [project.urls]
-Repository = "https://github.com/archolith/archolith-rtk"
-Issues = "https://github.com/archolith/archolith-rtk/issues"
+Repository = "https://github.com/archolith/archolith-filter"
+Issues = "https://github.com/archolith/archolith-filter/issues"
 
 [project.optional-dependencies]
 tokenizer = ["tiktoken>=0.7"]
@@ -34,11 +39,11 @@ context = ["archolith-proxy>=0.1.0"]
 dev = ["pytest>=8", "pytest-benchmark>=5", "pytest-cov>=5", "ruff>=0.5"]
 
 [project.entry-points."archolith.tool_extractors"]
-bash_rtk = "archolith_rtk.extractors.bash:BashRtkExtractor"
-read_file_rtk = "archolith_rtk.extractors.read_file:ReadFileRtkExtractor"
+bash_filter = "archolith_filter.extractors.bash:BashFilterExtractor"
+read_file_filter = "archolith_filter.extractors.read_file:ReadFileFilterExtractor"
 
 [tool.hatch.build.targets.wheel]
-packages = ["archolith_rtk"]
+packages = ["archolith_filter"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

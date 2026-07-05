@@ -35,8 +35,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from archolith_rtk.agent_solo import compress_agent_solo_turn, AgentSoloStats
-from archolith_rtk.dedupe import DedupeTracker
+from archolith_filter.agent_solo import compress_agent_solo_turn, AgentSoloStats
+from archolith_filter.dedupe import DedupeTracker
 
 
 # --- Synthetic data generation ------------------------------------------

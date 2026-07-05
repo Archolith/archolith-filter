@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("pytest_benchmark")
 
-from archolith_rtk import (
+from archolith_filter import (
     shrink_messages,
     shrink_oversized_tool_call_args_by_tokens,
     shrink_oversized_tool_results,

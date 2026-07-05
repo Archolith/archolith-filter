@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Token-Level Corpus Analysis for archolith-rtk research.
+Token-Level Corpus Analysis for archolith-filter research.
 
 Runs tiktoken over actual tool result content from Codex and Claude session
 corpora to produce ground-truth token counts. Re-ranks compression targets
@@ -776,7 +776,7 @@ def print_report(session_name, entries_by_type, content_by_category, encodings,
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Token-level corpus analysis for archolith-rtk")
+    parser = argparse.ArgumentParser(description="Token-level corpus analysis for archolith-filter")
     parser.add_argument("--codex", nargs="*", help="Codex JSONL session files")
     parser.add_argument("--claude", nargs="*", help="Claude JSONL session files")
     parser.add_argument("--all", action="store_true", help="Analyze all known session files")
