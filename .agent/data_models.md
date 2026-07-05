@@ -161,8 +161,8 @@ class ShrinkTokensResult:
 
 ### Token Estimation Helpers
 
-- `count_tokens(text)` uses `tiktoken` `cl100k_base` when installed.
-- Without `tiktoken`, `estimate_tokens_fallback(text)` uses a shape-aware heuristic: prose keeps the historical ~4 chars/token estimate and code/config-like text uses ~3.2 chars/token.
+- `count_tokens(text)` delegates tokenizer selection and fallback policy to `archolith-maintenance`.
+- With `tiktoken` available, the shared helper counts `cl100k_base` tokens. Without `tiktoken`, `estimate_tokens_fallback(text)` uses the shared shape-aware heuristic: prose keeps the historical ~4 chars/token estimate and code/config-like text uses ~3.2 chars/token.
 - `token_counts_are_estimated()` reports whether the fallback path is active.
 - `estimate_conversation_tokens(messages)` counts content, tool-call JSON, and a 15-token per-message framing estimate.
 

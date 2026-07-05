@@ -4,6 +4,11 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-06-21 — Shared Token Accounting Dependency
+
+- **refactor(shrink):** `shrink.token_counter` now delegates tokenizer selection and fallback token-count policy to `archolith-maintenance`.
+- **packaging:** Added `archolith-maintenance` as the shared helper dependency for canonical token accounting.
+
 ## 2026-06-20 — Token-count accuracy remediation (Session B)
 
 - **fix(shrink):** fallback token counting now uses a shape-aware heuristic: prose keeps the historical ~4 chars/token estimate, while code/config-like text uses a more conservative ~3.2 chars/token estimate and emits a one-time warning when `tiktoken` is unavailable.

@@ -18,6 +18,7 @@ All layers are deterministic by default.
 |-------|-----------|
 | Language | Python 3.11+ |
 | Packaging | hatchling (pyproject.toml) |
+| Shared helpers | archolith-maintenance token accounting |
 | Optional tokenizer | tiktoken (cl100k_base encoding) |
 | Testing | pytest + pytest-cov |
 | Linting | ruff |
@@ -104,7 +105,7 @@ The shrink subsystem is organized into focused submodules with a strict import D
 | Module | Responsibility |
 |--------|---------------|
 | `models.py` | Frozen dataclasses: ChatMessage, ToolCall, ToolCallFunction, ShrinkCharsResult, ShrinkTokensResult |
-| `token_counter.py` | `count_tokens()` — tiktoken `cl100k_base` if available, else shape-aware fallback (~4 chars/token prose, ~3.2 chars/token code/config) |
+| `token_counter.py` | `count_tokens()` — delegates tokenizer selection and fallback policy to `archolith-maintenance` |
 | `truncate.py` | `truncate_for_chars()` (head + 10% tail), `truncate_for_tokens()` (bounded edge-window search) |
 | `read_file_truncate.py` | Declaration-preserving char and token truncation for `read_file` tool output |
 | `json_shrink.py` | `shrink_json_long_strings()` — collapse long string values in tool_call arguments |
@@ -243,5 +244,5 @@ Risk-level presets adjust multiple thresholds together:
 
 ## External Dependencies
 
-- **tiktoken** (optional): Provides accurate token counting for Layer 2 shrink. Without it, falls back to a shape-aware heuristic: ~4 chars/token for prose and ~3.2 chars/token for code/config-like content. Install via `archolith-filter[tokenizer]`.
-- No other external dependencies — the library is zero-dependency by default.
+- **archolith-maintenance**: Provides the canonical token-counting primitive and fallback policy shared across Archolith projects.
+- **tiktoken** (optional): Provides accurate token counting for Layer 2 shrink. Without it, `archolith-maintenance` falls back to a shape-aware heuristic: ~4 chars/token for prose and ~3.2 chars/token for code/config-like content. Install via `archolith-filter[tokenizer]`.

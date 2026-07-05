@@ -8,7 +8,7 @@ Reduction layers:
 3. **Layer 2** — Shrink: Char and token-based truncation of oversized messages
 4. **Layer 3** — Agent-solo turn compression: mechanical shrink/dedup/filter/compact strategies for tool-call continuation payloads
 
-Zero mandatory external dependencies. tiktoken is optional for accurate token counting.
+Depends on `archolith-maintenance` for shared Archolith helper primitives. `tiktoken` is optional for accurate token counting.
 
 ## Quick Start
 

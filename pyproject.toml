@@ -25,7 +25,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    "archolith-maintenance>=0.1.0",
+]
 
 [project.urls]
 Repository = "https://github.com/archolith/archolith-filter"
