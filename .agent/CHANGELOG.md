@@ -4,6 +4,13 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-07-07 — Extractor dependency packaging
+
+- **packaging:** Added `[extractors]` optional extra for `httpx>=0.27` and included `httpx` in the dev extra so extractor tests have their runtime client dependency declared.
+- **fix(extractors):** Removed import-time `httpx` requirements from Bash and Read extractor modules; type-only imports now stay behind `TYPE_CHECKING`.
+- **tests:** Added a subprocess regression test proving extractor modules import when `httpx` is unavailable.
+- **docs:** README now documents repo/dist/module naming, `[extractors]`, and the local `archolith-context[filter]` sibling install path; architecture docs list optional runtime dependencies.
+
 ## 2026-06-21 — Shared Token Accounting Dependency
 
 - **refactor(shrink):** `shrink.token_counter` now delegates tokenizer selection and fallback token-count policy to `archolith-maintenance`.

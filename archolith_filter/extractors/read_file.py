@@ -7,13 +7,16 @@ richer facts than the built-in ReadExtractor's line count.
 
 from __future__ import annotations
 
-import httpx
+from typing import TYPE_CHECKING
 
 from archolith_filter.extractors.base import (
     FilterExtractorBase,
     PartialExtractionResult,
     ToolCallRecord,
 )
+
+if TYPE_CHECKING:
+    import httpx
 
 
 def _extract_path(args: dict) -> str:

@@ -9,8 +9,7 @@ produce structured facts, a single generic fact is emitted.
 from __future__ import annotations
 
 import re
-
-import httpx
+from typing import TYPE_CHECKING
 
 from archolith_filter.classifier import classify_command
 from archolith_filter.extractors.base import (
@@ -19,6 +18,9 @@ from archolith_filter.extractors.base import (
     ToolCallRecord,
 )
 from archolith_filter.strip_ansi import strip_ansi
+
+if TYPE_CHECKING:
+    import httpx
 
 # --- Regex patterns for category-specific extraction ---
 

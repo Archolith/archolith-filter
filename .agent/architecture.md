@@ -246,3 +246,5 @@ Risk-level presets adjust multiple thresholds together:
 
 - **archolith-maintenance**: Provides the canonical token-counting primitive and fallback policy shared across Archolith projects.
 - **tiktoken** (optional): Provides accurate token counting for Layer 2 shrink. Without it, `archolith-maintenance` falls back to a shape-aware heuristic: ~4 chars/token for prose and ~3.2 chars/token for code/config-like content. Install via `archolith-filter[tokenizer]`.
+- **httpx** (optional): Runtime client type used by the `archolith.tool_extractors` Bash/Read plugins. Core package imports do not require it; install via `archolith-filter[extractors]` when using extractor plugins directly.
+- **archolith-proxy** (optional, not yet public on PyPI): Host integration from `archolith-context`. The `[context]` extra remains forward-compatible, but local development should install `../archolith-context[filter]` first until publication is complete.
