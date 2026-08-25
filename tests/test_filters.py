@@ -741,10 +741,29 @@ class TestFilterOutput:
 
 
 class TestToolClassification:
+    @pytest.mark.parametrize("tool_name", ["read", "Read", "READ", "read-file", "read_file", "readfile"])
+    def test_normalize_read_aliases(self, tool_name):
+        import archolith_filter
+
+        assert archolith_filter.normalize_tool_name(tool_name) == "read_file"
+        assert archolith_filter._classify_tool(tool_name, "payload") == "read_file"
+
+    @pytest.mark.parametrize("tool_name", ["grep", "Grep", "rg", "ripgrep", "search", "search_content"])
+    def test_normalize_search_aliases(self, tool_name):
+        import archolith_filter
+
+        assert archolith_filter._classify_tool(tool_name, "payload") == "search"
+
+    @pytest.mark.parametrize("tool_name", ["glob", "Glob", "listdir", "list-directory", "list_directory", "ls"])
+    def test_normalize_directory_aliases(self, tool_name):
+        import archolith_filter
+
+        assert archolith_filter._classify_tool(tool_name, "payload") == "ls-tree"
+
     def test_classify_passthrough_tool(self):
         import archolith_filter
 
-        assert archolith_filter._classify_tool("raw_output", "payload") == "passthrough"
+        assert archolith_filter._classify_tool(" RAW-OUTPUT ", "payload") == "passthrough"
 
     def test_classify_shell_tool(self):
         import archolith_filter
@@ -765,6 +784,18 @@ class TestToolClassification:
         import archolith_filter
 
         assert archolith_filter._classify_tool("custom_tool", "payload") == "generic"
+
+    def test_opencode_read_uses_structural_filter_not_generic_head_tail(self):
+        body = "\n".join(
+            ["def first():", "    return 1"]
+            + [f"def function_{index}():\n    return {index}" for index in range(80)]
+            + ["def last():", "    return 2"]
+        )
+
+        result = filter_output(body, tool="read")
+
+        assert "def function_40():" in result.output
+        assert len(result.output) > len(body) * 0.9
 
 
 # ─── raw output store ───

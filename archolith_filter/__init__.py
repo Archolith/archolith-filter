@@ -124,6 +124,7 @@ __all__ = [
 "ClassifiedCommand",
 "CommandCategory",
 "classify_command",
+"normalize_tool_name",
 # ─── Normalization & Stripping ───
 "normalize_paths",
 "normalize_runtime_noise",
@@ -524,6 +525,38 @@ def filter_output(
 
 
 # Tool name classification for non-shell dispatch.
+#
+# Agent clients do not agree on tool names. Keep the compatibility mapping at
+# this lowest shared boundary so direct callers, proxy adapters, and agent-solo
+# compression cannot silently select different filters for the same operation.
+_TOOL_NAME_ALIASES: dict[str, str] = {
+    # OpenCode / common source-read names.
+    "read": "read_file",
+    "readfile": "read_file",
+    # OpenCode / common search names.
+    "grep": "search_content",
+    "rg": "search_content",
+    "ripgrep": "search_content",
+    "search": "search_content",
+    # Common directory-listing names.
+    "glob": "list_directory",
+    "listdir": "list_directory",
+    "ls": "list_directory",
+}
+
+
+def normalize_tool_name(tool_name: str) -> str:
+    """Return the canonical filter-facing name for a tool call.
+
+    Normalization is intentionally conservative: trim, case-fold, normalize
+    hyphens, then apply only aliases whose output semantics are equivalent.
+    Shell runners are not aliased here because they require the command text
+    for correct category selection.
+    """
+    normalized = str(tool_name or "").strip().casefold().replace("-", "_")
+    return _TOOL_NAME_ALIASES.get(normalized, normalized)
+
+
 _SHELL_TOOLS = frozenset({"run_command", "run_background", "job_output", "stop_job"})
 _NEVER_FILTER = frozenset({"raw_output"})
 
@@ -531,6 +564,7 @@ _TOOL_CATEGORY_MAP: dict[str, str] = {
     "read_file": "read_file",
     "edit_file": "edit_file",
     "search_content": "search",
+    "list_directory": "ls-tree",
     "wait_for_job": "logs",
     "list_jobs": "logs",
     "remember": "generic",
@@ -543,17 +577,18 @@ _TOOL_CATEGORY_MAP: dict[str, str] = {
 
 def _classify_tool(tool_name: str, text: str) -> str:
     """Classify a non-shell tool name into a filter category."""
-    if tool_name in _NEVER_FILTER:
+    normalized_name = normalize_tool_name(tool_name)
+    if normalized_name in _NEVER_FILTER:
         return "passthrough"
-    if tool_name in _SHELL_TOOLS:
+    if normalized_name in _SHELL_TOOLS:
         return "shell"  # Already filtered by shell pipeline
 
-    mapped = _TOOL_CATEGORY_MAP.get(tool_name)
+    mapped = _TOOL_CATEGORY_MAP.get(normalized_name)
     if mapped:
         return mapped
 
     # MCP tools: if output looks like JSON, use JSON filter.
-    if tool_name.startswith("mcp__"):
+    if normalized_name.startswith("mcp__"):
         trimmed = text.strip()
         if trimmed.startswith("{") or trimmed.startswith("["):
             return "json"
