@@ -785,6 +785,18 @@ class TestToolClassification:
 
         assert archolith_filter._classify_tool("custom_tool", "payload") == "generic"
 
+    @pytest.mark.parametrize("tool_name", ["", "   ", None])
+    def test_absent_tool_name_remains_generic(self, tool_name):
+        import archolith_filter
+
+        assert archolith_filter._classify_tool(tool_name, "payload") == "generic"
+
+    def test_shell_alias_is_not_mapped_to_already_filtered_bypass(self):
+        import archolith_filter
+
+        assert archolith_filter.normalize_tool_name("bash") == "bash"
+        assert archolith_filter._classify_tool("bash", "payload") == "generic"
+
     def test_opencode_read_uses_structural_filter_not_generic_head_tail(self):
         body = "\n".join(
             ["def first():", "    return 1"]
