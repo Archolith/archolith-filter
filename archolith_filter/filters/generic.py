@@ -257,16 +257,21 @@ def _describe_frameworks(fw_frames: list[tuple[int, str, str]]) -> str:
 # ─── Original filter ───
 
 
-def _collapse_blank_lines(lines: list[str]) -> list[str]:
-    """Collapse runs of 2+ blank lines into a single blank line."""
+def _collapse_blank_lines(lines: list[str], max_blank: int = 1) -> list[str]:
+    """Collapse runs of blank lines down to at most *max_blank* consecutive blanks."""
+    if max_blank <= 0:
+        max_blank = 1
+
     out: list[str] = []
-    prev_blank = False
+    consecutive_blank = 0
     for line in lines:
-        is_blank = line.strip() == ""
-        if is_blank and prev_blank:
-            continue
-        out.append(line)
-        prev_blank = is_blank
+        if line.strip() == "":
+            consecutive_blank += 1
+            if consecutive_blank <= max_blank:
+                out.append(line)
+        else:
+            consecutive_blank = 0
+            out.append(line)
     return out
 
 

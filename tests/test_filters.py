@@ -1532,3 +1532,43 @@ class TestJsonCompressValueSingleCall:
         expected = _compress_value(json.loads(payload), 0, DEFAULT_OPTS)
 
         assert json_filter(payload).output == expected
+
+
+class TestSharedHeaderExtraction:
+    """Wave 1 (L-4/L-5/F-04-adj): build/json filters use the canonical header helper.
+
+    Both previously inlined a copy that recognized only "[exit"/"[killed". A
+    background-job header line therefore stayed in the body, and for json_filter
+    that made json.loads fail, silently dropping the payload to the generic
+    fallback with no JSON compression at all.
+    """
+
+    _PAYLOAD = json.dumps({f"key_{i}": i for i in range(8)})
+
+    def test_job_header_does_not_block_json_compression(self):
+        r = json_filter("[job 2] curl api\n" + self._PAYLOAD)
+        assert r.output.startswith("[job 2] curl api")
+        # Key-value strategy applied: unquoted pairs, no raw JSON braces.
+        assert "key_0: 0" in r.output
+        assert "{" not in r.output
+
+    def test_job_header_output_matches_headerless_body(self):
+        with_header = json_filter("[job 2] curl api\n" + self._PAYLOAD).output
+        without = json_filter(self._PAYLOAD).output
+        assert with_header == "[job 2] curl api\n" + without
+
+    def test_exit_header_still_compresses(self):
+        r = json_filter("[exit 0]\n" + self._PAYLOAD)
+        assert r.output.startswith("[exit 0]")
+        assert "key_0: 0" in r.output
+
+    def test_leading_json_array_stays_in_body(self):
+        # The shared prefixes cannot match a bare "[", so an array is still parsed.
+        payload = json.dumps([{"a": 1, "b": 2}, {"a": 3, "b": 4}, {"a": 5, "b": 6}])
+        r = json_filter(payload)
+        assert r.output.splitlines()[0] == "a,b"
+
+    def test_build_filter_job_header_preserved(self):
+        body = "\n".join(f"Task :compile{i} UP-TO-DATE" for i in range(40))
+        r = build_filter("[job 1] gradle build\n" + body)
+        assert r.output.startswith("[job 1] gradle build")

@@ -15,7 +15,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from . import FilterResult
-from .generic import generic_filter
+from .generic import _extract_header, generic_filter
 
 # ─── Options ───
 
@@ -404,18 +404,10 @@ def json_filter(formatted: str, opts: JsonFilterOptions | None = None) -> Filter
 
     lines = formatted.split("\n")
 
-    # Identify the tool header block (only match [exit...] or [killed...], not JSON array brackets).
-    tool_header: list[str] = []
-    header_end = 0
-    for i, ln in enumerate(lines):
-        if ln.startswith("$ ") or (ln.startswith("[") and (ln.startswith("[exit") or ln.startswith("[killed"))):
-            header_end = i + 1
-        elif ln == "":
-            header_end = i + 1
-        else:
-            break
-    tool_header = lines[:header_end]
-    body = "\n".join(lines[header_end:])
+    # Shared header extraction: its prefixes are "[exit"/"[killed"/"[job", none of
+    # which can match a JSON array's opening "[", so a leading array stays in the body.
+    tool_header, body_lines = _extract_header(lines)
+    body = "\n".join(body_lines)
 
     if body.strip() == "":
         return FilterResult(output=formatted, raw_chars=raw_chars, filtered_chars=raw_chars, truncated=False)

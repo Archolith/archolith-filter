@@ -19,6 +19,7 @@ from .._patterns import (
     is_line_comment,
 )
 from . import FilterResult
+from .generic import _collapse_blank_lines
 
 
 @dataclass(frozen=True)
@@ -355,23 +356,6 @@ def _collapse_svg_path_block(lines: list[str], start: int) -> tuple[list[str], i
     opening = lines[start]
     closing = lines[idx - 1] if idx <= len(lines) and "</svg>" in lines[idx - 1] else "</svg>"
     return [opening, f" [... {count - 2} SVG path/body lines omitted ...]", closing], idx
-
-
-def _collapse_blank_lines(lines: list[str], max_blank: int) -> list[str]:
-    if max_blank <= 0:
-        max_blank = 1
-
-    out: list[str] = []
-    consecutive_blank = 0
-    for line in lines:
-        if line.strip() == "":
-            consecutive_blank += 1
-            if consecutive_blank <= max_blank:
-                out.append(line)
-        else:
-            consecutive_blank = 0
-            out.append(line)
-    return out
 
 
 def read_file_filter(formatted: str, opts: ReadFileFilterOptions | None = None) -> FilterResult:
