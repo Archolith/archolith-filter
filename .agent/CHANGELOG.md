@@ -4,6 +4,35 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-09-07 — Post-launch remediation: Wave 3 (correctness edge cases)
+
+- **fix(json_output):** `omitted_keys_suffix` was an identity function bypassed by two of its three call
+  sites, so every count read "more keys". Correct singular/plural at all three (M-7 c6).
+- **fix(shrink):** `truncate_for_chars` no longer exceeds `max_chars` by the marker's length; head then tail
+  shrink to make room, and budgets too small for any marker fall back to a hard slice. Zero overflows across
+  503 budgets x 6 sizes (F-13).
+- **fix(paths):** URLs no longer read as filesystem paths — `s://` as a drive letter, `//` after a scheme,
+  and `host:8080/api` as a relative path are all excluded. Tradeoff: a relative path whose parent ends in
+  `.` (`pkg.mod/file.py`) no longer matches (L9 c8).
+- **fix(_patterns):** `* item` no longer counts as a comment outside a `/* ... */` block, so Markdown bullet
+  lists are not collapsed as comment runs. State is tracked in `read_file_truncate`; `read_file.py` needs
+  none, since it consumes whole blocks (L-1 c6).
+- **fix(strip_ansi):** ESC coverage extended to `)`, `*`, `+` designators and ESC 6/7/8/9. The comment
+  already claimed designators the pattern lacked (L3 c8).
+- **fix(git_status):** header reused instead of re-extracted, and the grouping comparison measures rendered
+  text on both sides — summing line lengths dropped the newlines grouping removes (M-2 c6).
+- **fix(json_shrink):** removed the unreachable `isinstance(parsed, list)` clause; documented that only
+  top-level objects are shrunk (F-06).
+- **fix(build_output):** `\berror:` so `no_error:` is not a build failure (M-5). Note: the branch using this
+  regex and the branch below it call `generic_filter` with identical arguments, so the failure check has no
+  observable effect today — worth revisiting as a separate finding.
+- **fix(shrink):** the declaration trim loop drops tail entries once the head is exhausted (F-05). No input
+  was found where old and new differ; this is a guard, not a demonstrated fix.
+- **docs:** documented `_find_bracket_close`'s textual bracket scan (M-4), the deliberate 120-char error
+  capture cap (F-10), and the intentional `_TEST_BINS`/`_BUILD_BINS` overlap (M6 c8).
+- **no change needed:** M-6 (c6) — `_is_heading_path_line` already opens with the `_INLINE_PATH_RE` guard
+  the finding asks for, and the initial scan calls it.
+
 ## 2026-09-07 — Post-launch remediation: Wave 2 (performance)
 
 - **perf(telemetry):** `FilterTelemetryStore` uses `deque(maxlen=...)`, replacing an O(n) `list.pop(0)` on
