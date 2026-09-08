@@ -4,6 +4,22 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-09-07 — Review remediation (P2/P3 findings)
+
+- **fix(json_shrink):** `shrink_json_long_strings` now shrinks long strings in arrays as well as objects, at
+  any depth. Removing F-06's dead clause had left top-level arrays returned verbatim, which did not discharge
+  the plan item — Wave 3's execution guidance lists F-06 among the fixes required to be behavior-changing and
+  test-covered. Recursion is uniform across containers (wider than the finding's literal wording, deliberately:
+  an array of objects keeps its long strings one level down). Top-level scalars are still returned untouched.
+- **tests:** `tests/test_review_remediation.py` — nine array/recursion cases (five fail against the pre-fix
+  implementation) and six focused ANSI cases for the `ESC ( ) * +` designators and `ESC 6/7/8/9` that L3
+  added, verified discriminating (16 of 20 sequences go unstripped by the previous pattern).
+- **note:** `test_non_object_returns_unchanged` is unmodified per the plan's "do not modify existing tests to
+  pass". It still passes — `[1, 2, 3]` round-trips through `json.dumps` — but its name no longer describes
+  the behavior, since arrays are now processed.
+- **correction:** the wrapup's completion checklist claimed acceptance criteria complete while disclosing the
+  unmet consolidation-tracker criterion; corrected to `partial`. That criterion remains open.
+
 ## 2026-09-07 — Post-launch remediation: Wave 4 (robustness / coupling)
 
 - **refactor(extractors):** collapse-marker phrases are now named constants in `filters/read_file.py`,
