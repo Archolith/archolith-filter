@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/archolith/archolith-filter"
-Issues = "https://github.com/archolith/archolith-filter/issues"
+Repository = "https://github.com/Archolith/archolith-filter"
+Issues = "https://github.com/Archolith/archolith-filter/issues"
 
 [project.optional-dependencies]
 tokenizer = ["tiktoken>=0.7"]
