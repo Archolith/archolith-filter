@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: ruff (package)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff (from the dev extra's floor)
+        run: python -m pip install "ruff>=0.5"
+      # Scoped to the shipped package, which is clean. tests/ (8 findings) and
+      # scripts/ (58) carry pre-existing lint debt that predates this workflow and
+      # is a separate cleanup -- widening the scope here would land this gate red.
+      # pyproject declares an explicit `[tool.ruff.lint] select`, so a new ruff
+      # release cannot silently widen what is enforced.
+      - name: Ruff check
+        run: python -m ruff check archolith_filter
+
+  test:
+    name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.12"]
+        # The filters do path and encoding work that behaves differently on
+        # Windows; one leg guards that rather than a docs note.
+        include:
+          - os: windows-latest
+            python-version: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # archolith-maintenance is a hard dependency and is public but not on PyPI,
+      # so it installs from git. The `context` extra (archolith-proxy) is
+      # deliberately NOT installed: the base package must import without it, and
+      # tests/test_extractors/test_stubs.py asserts that.
+      - name: Install archolith-maintenance (git; public, not on PyPI)
+        run: python -m pip install "archolith-maintenance @ git+https://github.com/Archolith/archolith-maintenance.git"
+
+      - name: Install archolith-filter (editable, dev extras)
+        run: python -m pip install -e ".[dev]"
+
+      # The package must import with no optional extras present -- that contract
+      # is what the [extractors] lazy-import work exists to protect.
+      - name: Import smoke (no optional extras)
+        run: python -c "import archolith_filter; print(archolith_filter.__name__, 'ok')"
+
+      - name: Run test suite
+        run: python -m pytest -q
