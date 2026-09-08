@@ -125,3 +125,6 @@ def git_status_filter(formatted: str, opts: GitStatusFilterOptions | None = None
         )
 
     return generic_filter(formatted)
+
+
+__all__ = ["DEFAULT_OPTS", "GitStatusFilterOptions", "git_status_filter"]

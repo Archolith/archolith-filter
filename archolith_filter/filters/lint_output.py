@@ -29,3 +29,6 @@ def lint_filter(formatted: str, opts: LintFilterOptions | None = None) -> Filter
     return generic_filter(
         formatted, GenericFilterOptions(head_lines=opts.head_lines, tail_lines=opts.tail_lines)
     )
+
+
+__all__ = ["DEFAULT_OPTS", "LintFilterOptions", "lint_filter"]

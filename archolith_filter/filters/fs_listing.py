@@ -275,3 +275,6 @@ def fs_listing_filter(formatted: str, opts: FsListingFilterOptions | None = None
 
     result = "\n".join(parts)
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "FsListingFilterOptions", "fs_listing_filter"]

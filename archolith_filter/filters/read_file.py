@@ -484,3 +484,6 @@ def read_file_filter(formatted: str, opts: ReadFileFilterOptions | None = None) 
         filtered_chars=len(output),
         truncated=truncated,
     )
+
+
+__all__ = ["DEFAULT_OPTS", "ReadFileFilterOptions", "read_file_filter"]

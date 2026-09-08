@@ -54,3 +54,6 @@ def git_log_filter(formatted: str, opts: GitLogFilterOptions | None = None) -> F
 
     result = "\n".join(header + non_blank_head + ["", marker, ""] + non_blank_tail)
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "GitLogFilterOptions", "git_log_filter"]

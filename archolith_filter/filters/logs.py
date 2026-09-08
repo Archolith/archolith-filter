@@ -104,3 +104,6 @@ def log_filter(formatted: str, opts: LogFilterOptions | None = None) -> FilterRe
         result = "\n".join(header + head + ["", marker, ""] + tail)
 
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "LogFilterOptions", "log_filter"]

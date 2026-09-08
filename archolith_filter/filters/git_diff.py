@@ -165,3 +165,6 @@ def git_diff_filter(formatted: str, opts: GitDiffFilterOptions | None = None) ->
     compressed = _compress_diff_body(diff_lines, opts)
     result = "\n".join(header + stat_lines + compressed)
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "GitDiffFilterOptions", "git_diff_filter"]

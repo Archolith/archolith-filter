@@ -62,3 +62,6 @@ def git_show_filter(formatted: str, opts: GitShowFilterOptions | None = None) ->
 
     result = "\n".join(filtered_tool_header + commit_header + filtered_body)
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "GitShowFilterOptions", "git_show_filter"]

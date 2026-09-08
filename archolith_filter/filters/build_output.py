@@ -145,3 +145,6 @@ def build_filter(formatted: str, opts: BuildFilterOptions | None = None) -> Filt
     result = "\n".join(parts)
     truncated = len(result) < raw_chars
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=truncated)
+
+
+__all__ = ["BuildFilterOptions", "DEFAULT_OPTS", "build_filter"]

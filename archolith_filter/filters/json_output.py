@@ -472,3 +472,6 @@ def json_filter(formatted: str, opts: JsonFilterOptions | None = None) -> Filter
 
     truncated = len(result) < raw_chars
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=truncated)
+
+
+__all__ = ["DEFAULT_OPTS", "JsonFilterOptions", "json_filter", "omitted_keys_suffix"]

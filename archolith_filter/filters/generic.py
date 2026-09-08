@@ -321,3 +321,6 @@ def generic_filter(formatted: str, opts: GenericFilterOptions | None = None) -> 
 
     result = "\n".join(header + head + ["", marker, ""] + tail)
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "GenericFilterOptions", "generic_filter"]
