@@ -4,6 +4,23 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-09-07 — Post-launch remediation: Wave 1 (consolidation / DRY)
+
+- **refactor(filters):** `build_output` and `json_output` now call the shared `_extract_header` instead of
+  each carrying an inline copy that recognized only `[exit`/`[killed`. For `json_output` this fixes a real
+  defect: a `[job N]` header line stayed in the body, `json.loads` failed on it, and the payload silently
+  fell through to the generic filter with no JSON compression (M-1, L-4 c6, L-5 c6, F-04-adj).
+- **refactor(filters):** `_collapse_blank_lines` deduplicated; the configurable version now lives in
+  `generic` with `max_blank` defaulting to 1, matching generic's previous behavior.
+- **refactor(config):** `from_env()` is table-driven off `dataclasses.fields(FilterConfig)` plus a single
+  `_ENV_BINDINGS` table — 199 lines of hand-written constructor down to a table plus a loop. Verified
+  byte-identical across 2,975 snapshot cells (66 fields x 9 probes x 5 risk levels) (M-7 c8).
+- **refactor:** removed `filter_meta`'s dead `is_verbose_command` re-export; `config` is the single
+  canonical re-export point. Risk-override dicts are now typed (L-4 c8).
+- **refactor(filters):** all 14 filter modules declare `__all__` (L-9 c6).
+- **tests:** added `TestSharedHeaderExtraction` and `TestConfigEnvBindings`, including a guard that fails if
+  a `FilterConfig` field is added without an env binding.
+
 ## 2026-09-07 — Post-launch remediation: P0-1 (deferred High)
 
 - **perf(json_output):** `json_filter` no longer computes `_compress_value(parsed, 0, opts)` twice when a
