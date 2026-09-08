@@ -9,8 +9,7 @@ produce structured facts, a single generic fact is emitted.
 from __future__ import annotations
 
 import re
-
-import httpx
+from typing import TYPE_CHECKING
 
 from archolith_filter.classifier import classify_command
 from archolith_filter.extractors.base import (
@@ -19,6 +18,9 @@ from archolith_filter.extractors.base import (
     ToolCallRecord,
 )
 from archolith_filter.strip_ansi import strip_ansi
+
+if TYPE_CHECKING:
+    import httpx
 
 # --- Regex patterns for category-specific extraction ---
 
@@ -31,6 +33,10 @@ _GIT_STATUS_MODIFIED_RE = re.compile(r"^\s+(?:modified|new file|deleted):\s+(.+)
 _GIT_DIFF_FILE_RE = re.compile(r"^(?:\+\+\+|---)\s+(?:a/|b/)(.+)", re.MULTILINE)
 _GIT_LOG_RE = re.compile(r"^([0-9a-f]{7,}) (.+)", re.MULTILINE)
 
+# The 120-char cap on the captured message is deliberate: these facts are
+# summaries fed back into context, and an unbounded capture would let one long
+# error line dominate the extraction budget. Long messages are truncated, not
+# dropped.
 _ERROR_RE = re.compile(r"(?:error|Error|ERROR):?\s+(.{0,120})")
 
 

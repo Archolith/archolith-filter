@@ -19,6 +19,7 @@ from .._patterns import (
     is_line_comment,
 )
 from . import FilterResult
+from .generic import _collapse_blank_lines
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,17 @@ class ReadFileFilterOptions:
 
 
 DEFAULT_OPTS = ReadFileFilterOptions()
+
+# Collapse-marker phrases. These are part of this filter's contract with its
+# readers: extractors detect what was collapsed by looking for them, so they are
+# named here rather than spelled out at each call site and re-typed downstream.
+MARKER_IMPORT = "import lines omitted"
+MARKER_COMMENT = "comment lines omitted"
+MARKER_CSS = "CSS body lines omitted"
+MARKER_GENERATED = "generated lines omitted"
+MARKER_MINIFIED = "minified lines omitted"
+MARKER_MULTILINE_STRING = "multiline string lines omitted"
+MARKER_SVG = "SVG path/body lines omitted"
 
 _CSS_RULE_RE = re.compile(r"^\s*[\w\-\.\#\[\]:,>+~*][\s\w\-\.\#\[\]:,>+~*]*\{")
 _CSS_CLOSE_RE = re.compile(r"\}\s*$")
@@ -172,7 +184,7 @@ def _collapse_imports(lines: list[str], start: int) -> tuple[list[str], int]:
     if count <= 3:
         return lines[start:idx], idx
 
-    collapsed = [first_line, f" [... {count - 1} import lines omitted ...]"]
+    collapsed = [first_line, f" [... {count - 1} {MARKER_IMPORT} ...]"]
     return collapsed, idx
 
 
@@ -201,7 +213,7 @@ def _collapse_comment_block(lines: list[str], start: int, threshold: int) -> tup
     if count <= threshold:
         return lines[start:idx], idx
 
-    collapsed = [first_line, f" [... {count - 1} comment lines omitted ...]"]
+    collapsed = [first_line, f" [... {count - 1} {MARKER_COMMENT} ...]"]
     return collapsed, idx
 
 
@@ -226,7 +238,7 @@ def _collapse_css_rules(lines: list[str], start: int) -> tuple[list[str], int]:
     if body_count <= 3:
         return lines[start:idx], idx
 
-    return [selector_line, f" [... {body_count} CSS body lines omitted ...]", "}"], idx
+    return [selector_line, f" [... {body_count} {MARKER_CSS} ...]", "}"], idx
 
 
 def _collapse_generated_block(
@@ -250,11 +262,19 @@ def _collapse_generated_block(
     if count < min_run:
         return lines[start:idx], idx
 
-    marker_type = "minified" if _looks_minified(sample_line) else "generated"
-    return [sample_line, f" [... {count - 1} {marker_type} lines omitted ...]"], idx
+    marker = MARKER_MINIFIED if _looks_minified(sample_line) else MARKER_GENERATED
+    return [sample_line, f" [... {count - 1} {marker} ...]"], idx
 
 
 def _find_bracket_close(lines: list[str], start: int, open_char: str, close_char: str) -> int:
+    """Find the line index just past the bracket opened at *start*.
+
+    Counts brackets textually, without tracking string or comment state, so a
+    bracket inside a string literal or comment shifts the depth. The consequence
+    is a literal block that ends earlier or later than it should — a compression
+    boundary being off, never malformed output — so the simpler scan is kept
+    deliberately. Add quote-state tracking here if that boundary starts mattering.
+    """
     first_line = lines[start]
     last_open_pos = first_line.rfind(open_char)
     depth = first_line[last_open_pos:].count(open_char) - first_line[last_open_pos:].count(close_char)
@@ -294,6 +314,9 @@ def _collapse_literal_block(
     if block_len <= threshold:
         return lines[start:end_idx], end_idx
 
+    # end_idx is one past the closing line, so the closer is at end_idx - 1. The
+    # guard is "<=" rather than "<" because end_idx == len(lines) is the normal
+    # case for a block that ends on the file's last line.
     close_line = lines[end_idx - 1] if end_idx <= len(lines) else close_char
     return [
         first_line,
@@ -327,7 +350,7 @@ def _collapse_multiline_string(lines: list[str], start: int, threshold: int) -> 
     close_line = lines[idx - 1] if idx <= len(lines) else delim
     return [
         first_line,
-        f" [... {count - 2} multiline string lines omitted ...]",
+        f" [... {count - 2} {MARKER_MULTILINE_STRING} ...]",
         close_line,
     ], idx
 
@@ -353,25 +376,11 @@ def _collapse_svg_path_block(lines: list[str], start: int) -> tuple[list[str], i
         return lines[start:idx], idx
 
     opening = lines[start]
+    # idx is one past the last consumed line, so the real closing tag is at
+    # idx - 1; fall back to a synthetic "</svg>" when the block ran to the end of
+    # the input without one.
     closing = lines[idx - 1] if idx <= len(lines) and "</svg>" in lines[idx - 1] else "</svg>"
-    return [opening, f" [... {count - 2} SVG path/body lines omitted ...]", closing], idx
-
-
-def _collapse_blank_lines(lines: list[str], max_blank: int) -> list[str]:
-    if max_blank <= 0:
-        max_blank = 1
-
-    out: list[str] = []
-    consecutive_blank = 0
-    for line in lines:
-        if line.strip() == "":
-            consecutive_blank += 1
-            if consecutive_blank <= max_blank:
-                out.append(line)
-        else:
-            consecutive_blank = 0
-            out.append(line)
-    return out
+    return [opening, f" [... {count - 2} {MARKER_SVG} ...]", closing], idx
 
 
 def read_file_filter(formatted: str, opts: ReadFileFilterOptions | None = None) -> FilterResult:
@@ -500,3 +509,6 @@ def read_file_filter(formatted: str, opts: ReadFileFilterOptions | None = None) 
         filtered_chars=len(output),
         truncated=truncated,
     )
+
+
+__all__ = ["DEFAULT_OPTS", "ReadFileFilterOptions", "read_file_filter"]

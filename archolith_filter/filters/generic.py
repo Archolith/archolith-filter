@@ -118,7 +118,9 @@ def _detect_stack_trace(lines: list[str], min_frames: int) -> list[tuple[int, in
 
     # Final run
     if current_start is not None and len(lines) - current_start >= min_frames:
-        runs.append((current_start, len(lines), current_lang))  # type: ignore[arg-type]
+        # current_lang is always assigned together with current_start.
+        assert current_lang is not None
+        runs.append((current_start, len(lines), current_lang))
 
     return runs if runs else None
 
@@ -257,16 +259,21 @@ def _describe_frameworks(fw_frames: list[tuple[int, str, str]]) -> str:
 # ─── Original filter ───
 
 
-def _collapse_blank_lines(lines: list[str]) -> list[str]:
-    """Collapse runs of 2+ blank lines into a single blank line."""
+def _collapse_blank_lines(lines: list[str], max_blank: int = 1) -> list[str]:
+    """Collapse runs of blank lines down to at most *max_blank* consecutive blanks."""
+    if max_blank <= 0:
+        max_blank = 1
+
     out: list[str] = []
-    prev_blank = False
+    consecutive_blank = 0
     for line in lines:
-        is_blank = line.strip() == ""
-        if is_blank and prev_blank:
-            continue
-        out.append(line)
-        prev_blank = is_blank
+        if line.strip() == "":
+            consecutive_blank += 1
+            if consecutive_blank <= max_blank:
+                out.append(line)
+        else:
+            consecutive_blank = 0
+            out.append(line)
     return out
 
 
@@ -316,3 +323,6 @@ def generic_filter(formatted: str, opts: GenericFilterOptions | None = None) -> 
 
     result = "\n".join(header + head + ["", marker, ""] + tail)
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "GenericFilterOptions", "generic_filter"]

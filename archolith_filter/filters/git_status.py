@@ -92,7 +92,7 @@ def git_status_filter(formatted: str, opts: GitStatusFilterOptions | None = None
         opts = DEFAULT_OPTS
 
     lines = formatted.split("\n")
-    _, body = _extract_header(lines)
+    header, body = _extract_header(lines)
 
     if not body:
         return FilterResult(
@@ -105,12 +105,15 @@ def git_status_filter(formatted: str, opts: GitStatusFilterOptions | None = None
         if opts.group_enabled:
             grouped = _group_short_status(body, opts.group_max_per_line)
             if grouped is not None:
-                # Check that grouping actually shortened the output
+                # Check that grouping actually shortened the output. Compare the
+                # rendered text on both sides: summing line lengths dropped the
+                # newlines, which is exactly what grouping removes, so the old
+                # comparison understated the saving it was measuring.
                 grouped_text = "\n".join(grouped)
-                original_len = sum(len(ln) for ln in body if ln.strip())
-                grouped_len = sum(len(ln) for ln in grouped if ln.strip())
+                original_len = len("\n".join(ln for ln in body if ln.strip()))
+                grouped_len = len("\n".join(ln for ln in grouped if ln.strip()))
                 if grouped_len <= original_len:
-                    header_text = "\n".join(_extract_header(lines)[0])
+                    header_text = "\n".join(header)
                     if header_text:
                         result = header_text + "\n" + grouped_text
                     else:
@@ -125,3 +128,6 @@ def git_status_filter(formatted: str, opts: GitStatusFilterOptions | None = None
         )
 
     return generic_filter(formatted)
+
+
+__all__ = ["DEFAULT_OPTS", "GitStatusFilterOptions", "git_status_filter"]

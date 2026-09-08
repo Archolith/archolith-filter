@@ -38,6 +38,9 @@ def _collapse_imports_and_comments(lines: list[str]) -> list[str]:
     comment_count = 0
     import_start = -1
     comment_start = -1
+    # Tracks whether we are inside a /* ... */ block, so that "* foo"
+    # continuation lines count as comments there but not in Markdown prose.
+    in_block_comment = False
 
     while idx < len(lines):
         line = lines[idx]
@@ -56,12 +59,17 @@ def _collapse_imports_and_comments(lines: list[str]) -> list[str]:
             import_start = -1
             import_count = 0
 
-        if is_comment_line(line):
+        if is_comment_line(line, in_block_comment):
+            if "/*" in line and "*/" not in line:
+                in_block_comment = True
+            elif "*/" in line:
+                in_block_comment = False
             if comment_start == -1:
                 comment_start = idx
             comment_count += 1
             idx += 1
             continue
+        in_block_comment = False
         if comment_start != -1:
             if comment_count > 5:
                 result_lines.append(lines[comment_start])
@@ -156,14 +164,18 @@ def truncate_read_file_for_chars(text: str, max_chars: int) -> str:
     return "\n".join(head_decl) + marker + "\n".join(tail_decl)
 
 
-def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
+def truncate_read_file_for_tokens(
+    text: str, max_tokens: int, text_tokens: int | None = None
+) -> str:
     """Structure-aware token-budget truncation for read_file tool output."""
     if max_tokens <= 0:
         return ""
     if len(text) <= max_tokens:
         return text
-    if len(text) <= max_tokens * _CHARS_PER_TOKEN_ESTIMATE and count_tokens(text) <= max_tokens:
-        return text
+    if len(text) <= max_tokens * _CHARS_PER_TOKEN_ESTIMATE:
+        total = text_tokens if text_tokens is not None else count_tokens(text)
+        if total <= max_tokens:
+            return text
 
     lines = text.split("\n")
     result_lines = _collapse_imports_and_comments(lines)
@@ -177,7 +189,10 @@ def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
         return truncate_for_tokens(text, max_tokens)
 
     content_budget = max(0, max_tokens - _MARKER_TOKEN_OVERHEAD)
-    total_decl_tokens = sum(count_tokens(line) for line in decl_lines)
+    # Tokenize each declaration once; the head and tail budgets below reuse these
+    # counts instead of re-tokenizing the same lines.
+    decl_tokens = [count_tokens(line) for line in decl_lines]
+    total_decl_tokens = sum(decl_tokens)
     if total_decl_tokens <= content_budget:
         marker = f"\n\n[…read_file compressed: {len(lines) - len(decl_lines)} non-declaration lines omitted…]\n\n"
         return "\n".join(decl_lines) + marker
@@ -187,8 +202,7 @@ def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
     head_decl: list[str] = []
     tail_decl: list[str] = []
     acc = 0
-    for dl in decl_lines:
-        tokens = count_tokens(dl)
+    for dl, tokens in zip(decl_lines, decl_tokens):
         if acc + tokens <= head_budget:
             head_decl.append(dl)
             acc += tokens
@@ -196,10 +210,9 @@ def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
             break
 
     tail_acc = 0
-    for dl in reversed(decl_lines):
+    for dl, tokens in zip(reversed(decl_lines), reversed(decl_tokens)):
         if dl in head_decl:
             break
-        tokens = count_tokens(dl)
         if tail_acc + tokens <= tail_budget:
             tail_decl.insert(0, dl)
             tail_acc += tokens
@@ -209,20 +222,23 @@ def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
     if not head_decl and not tail_decl:
         return truncate_for_tokens(text, max_tokens)
 
-    dropped = len(decl_lines) - len(head_decl) - len(tail_decl)
-    marker = (
-        f"\n\n[…read_file compressed: ~{dropped} declarations & body lines omitted"
-        f" — raise budget or narrow the read scope…]\n\n"
-    )
-    result = "\n".join(head_decl) + marker + "\n".join(tail_decl)
-    while head_decl and count_tokens(result) > max_tokens:
-        head_decl.pop()
+    def render() -> str:
         dropped = len(decl_lines) - len(head_decl) - len(tail_decl)
         marker = (
             f"\n\n[…read_file compressed: ~{dropped} declarations & body lines omitted"
             f" — raise budget or narrow the read scope…]\n\n"
         )
-        result = "\n".join(head_decl) + marker + "\n".join(tail_decl)
+        return "\n".join(head_decl) + marker + "\n".join(tail_decl)
+
+    # Drop head declarations first, then tail ones. Trimming only the head left
+    # the result over budget whenever the tail alone still exceeded it.
+    result = render()
+    while (head_decl or tail_decl) and count_tokens(result) > max_tokens:
+        if head_decl:
+            head_decl.pop()
+        else:
+            tail_decl.pop(0)
+        result = render()
 
     if not head_decl and not tail_decl:
         return truncate_for_tokens(text, max_tokens)

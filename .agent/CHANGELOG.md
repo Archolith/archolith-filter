@@ -4,6 +4,138 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-09-07 — Review remediation (P2/P3 findings)
+
+- **fix(json_shrink):** `shrink_json_long_strings` now shrinks long strings in arrays as well as objects, at
+  any depth. Removing F-06's dead clause had left top-level arrays returned verbatim, which did not discharge
+  the plan item — Wave 3's execution guidance lists F-06 among the fixes required to be behavior-changing and
+  test-covered. Recursion is uniform across containers (wider than the finding's literal wording, deliberately:
+  an array of objects keeps its long strings one level down). Top-level scalars are still returned untouched.
+- **tests:** `tests/test_review_remediation.py` — nine array/recursion cases (five fail against the pre-fix
+  implementation) and six focused ANSI cases for the `ESC ( ) * +` designators and `ESC 6/7/8/9` that L3
+  added, verified discriminating (16 of 20 sequences go unstripped by the previous pattern).
+- **note:** `test_non_object_returns_unchanged` is unmodified per the plan's "do not modify existing tests to
+  pass". It still passes — `[1, 2, 3]` round-trips through `json.dumps` — but its name no longer describes
+  the behavior, since arrays are now processed.
+- **correction:** the wrapup's completion checklist claimed acceptance criteria complete while disclosing the
+  unmet consolidation-tracker criterion; corrected to `partial`. That criterion remains open.
+
+## 2026-09-07 — Post-launch remediation: Wave 4 (robustness / coupling)
+
+- **refactor(extractors):** collapse-marker phrases are now named constants in `filters/read_file.py`,
+  emitted there and imported by the read_file extractor, which previously matched hand-typed English
+  strings (F-12).
+- **fix(shrink):** the assistant-path message rebuild carries `tool_call_id` and `name` instead of listing
+  three of five fields. No live impact — assistant messages do not populate them in the OpenAI format — but
+  the trap is closed and covered by a test (F-15).
+- **docs:** documented both deferred imports (F-11, L5). The `agent_solo` one breaks a verified cycle:
+  `__init__` imports `agent_solo` at package import time.
+- **refactor(generic):** `# type: ignore[arg-type]` replaced with an assert narrowing `current_lang` (L6 c6).
+- **docs(normalize):** the "ms before s" comment claimed an ordering that does not matter; both patterns are
+  word-boundary anchored, verified identical output in both orders across seven samples (L8 c8).
+- **docs(read_file):** boundary-index comments on the two "one past the end" slices (L2, L3 c6).
+- **no change needed:** F-09 (c7) — the global `_count_tokens_fn` is gone with the archolith-maintenance
+  delegation; L1 (c8) — dedupe's CPython dict-order dependence is already documented in-code.
+
+**Plan complete.** All four waves plus the deferred High (P0-1) are done. Of the plan's ~46 findings: 34
+fixed, 6 were already fixed before this session, 3 needed no change (M-6, F-09, L1), 1 dropped as not
+reproducible (M-8), and 2 are recorded as unproven or ineffective (F-05 is a guard with no demonstrated
+behavior change; M-5 has no observable effect because the branch consuming its regex is dead — see below).
+
+**Follow-ups discovered, not in the plan:**
+- `build_output.py`: the build-failure branch and the branch below it call `generic_filter` with identical
+  arguments, so the failure check cannot change the output. Needs a decision about what a detected failure
+  should do differently.
+- `json_output.py`: the array path still prints "+1 more items" — the same plural defect as M-7, which
+  covered keys only.
+- `truncate_for_tokens` has the same marker-floor issue F-13 fixed for `truncate_for_chars`: budgets smaller
+  than the marker still overflow (~25 tokens at budget 5).
+
+## 2026-09-07 — Post-launch remediation: Wave 3 (correctness edge cases)
+
+- **fix(json_output):** `omitted_keys_suffix` was an identity function bypassed by two of its three call
+  sites, so every count read "more keys". Correct singular/plural at all three (M-7 c6).
+- **fix(shrink):** `truncate_for_chars` no longer exceeds `max_chars` by the marker's length; head then tail
+  shrink to make room, and budgets too small for any marker fall back to a hard slice. Zero overflows across
+  503 budgets x 6 sizes (F-13).
+- **fix(paths):** URLs no longer read as filesystem paths — `s://` as a drive letter, `//` after a scheme,
+  and `host:8080/api` as a relative path are all excluded. Tradeoff: a relative path whose parent ends in
+  `.` (`pkg.mod/file.py`) no longer matches (L9 c8).
+- **fix(_patterns):** `* item` no longer counts as a comment outside a `/* ... */` block, so Markdown bullet
+  lists are not collapsed as comment runs. State is tracked in `read_file_truncate`; `read_file.py` needs
+  none, since it consumes whole blocks (L-1 c6).
+- **fix(strip_ansi):** ESC coverage extended to `)`, `*`, `+` designators and ESC 6/7/8/9. The comment
+  already claimed designators the pattern lacked (L3 c8).
+- **fix(git_status):** header reused instead of re-extracted, and the grouping comparison measures rendered
+  text on both sides — summing line lengths dropped the newlines grouping removes (M-2 c6).
+- **fix(json_shrink):** removed the unreachable `isinstance(parsed, list)` clause; documented that only
+  top-level objects are shrunk (F-06).
+- **fix(build_output):** `\berror:` so `no_error:` is not a build failure (M-5). Note: the branch using this
+  regex and the branch below it call `generic_filter` with identical arguments, so the failure check has no
+  observable effect today — worth revisiting as a separate finding.
+- **fix(shrink):** the declaration trim loop drops tail entries once the head is exhausted (F-05). No input
+  was found where old and new differ; this is a guard, not a demonstrated fix.
+- **docs:** documented `_find_bracket_close`'s textual bracket scan (M-4), the deliberate 120-char error
+  capture cap (F-10), and the intentional `_TEST_BINS`/`_BUILD_BINS` overlap (M6 c8).
+- **no change needed:** M-6 (c6) — `_is_heading_path_line` already opens with the `_INLINE_PATH_RE` guard
+  the finding asks for, and the initial scan calls it.
+
+## 2026-09-07 — Post-launch remediation: Wave 2 (performance)
+
+- **perf(telemetry):** `FilterTelemetryStore` uses `deque(maxlen=...)`, replacing an O(n) `list.pop(0)` on
+  every record once full (M4 c8). The cl100k_base encoding is built once via `lru_cache` instead of per
+  recorded call; only successful results are cached, so a tiktoken-less environment still falls back every
+  call (L7 c8).
+- **perf:** `_is_binary_output` uses `str.count` over the scan window instead of a per-character Python loop
+  across up to 64k chars of every tool result. The old loop stopped at the threshold, so the count it
+  reported was always threshold+1; the real count in the window is now reported (L6 c8).
+- **perf(filters):** `fs_listing` (21 patterns) and `logs` (10) each compile to a single alternation instead
+  of a sequential list scan. Verified against the previous lists over 79 name and 67 line cases with zero
+  differences (L-7 c6, L-8 c6).
+- **perf(shrink):** `read_file_truncate` tokenizes each declaration line once instead of up to three times
+  (F-03). `truncate_for_tokens` / `truncate_read_file_for_tokens` accept an optional pre-computed count and
+  the orchestrator passes the one it already made, cutting full-string tokenizations from 3 to 2 in the
+  affected band (F-14). Both verified output-identical.
+- **fix(paths):** workspace-root detection warns instead of silently falling back to CWD, and the module
+  docstring's description of that fallback is corrected (H3-dg). `_infer_project_roots` uses `os.scandir`
+  (M5 — one-time cost, since `get_path_config` caches).
+- **dropped:** M-8 (c6) `_collapse_stack_frames` "double classification" is not reproducible against current
+  code — each frame is classified once into `classified`; only the two filtering passes over that list remain.
+- **tests:** added `TestKnownTokenCountReuse` and `TestWorkspaceRootFallback`.
+
+## 2026-09-07 — Post-launch remediation: Wave 1 (consolidation / DRY)
+
+- **refactor(filters):** `build_output` and `json_output` now call the shared `_extract_header` instead of
+  each carrying an inline copy that recognized only `[exit`/`[killed`. For `json_output` this fixes a real
+  defect: a `[job N]` header line stayed in the body, `json.loads` failed on it, and the payload silently
+  fell through to the generic filter with no JSON compression (M-1, L-4 c6, L-5 c6, F-04-adj).
+- **refactor(filters):** `_collapse_blank_lines` deduplicated; the configurable version now lives in
+  `generic` with `max_blank` defaulting to 1, matching generic's previous behavior.
+- **refactor(config):** `from_env()` is table-driven off `dataclasses.fields(FilterConfig)` plus a single
+  `_ENV_BINDINGS` table — 199 lines of hand-written constructor down to a table plus a loop. Verified
+  byte-identical across 2,975 snapshot cells (66 fields x 9 probes x 5 risk levels) (M-7 c8).
+- **refactor:** removed `filter_meta`'s dead `is_verbose_command` re-export; `config` is the single
+  canonical re-export point. Risk-override dicts are now typed (L-4 c8).
+- **refactor(filters):** all 14 filter modules declare `__all__` (L-9 c6).
+- **tests:** added `TestSharedHeaderExtraction` and `TestConfigEnvBindings`, including a guard that fails if
+  a `FilterConfig` field is added without an env binding.
+
+## 2026-09-07 — Post-launch remediation: P0-1 (deferred High)
+
+- **perf(json_output):** `json_filter` no longer computes `_compress_value(parsed, 0, opts)` twice when a
+  format-switch strategy applies but loses the size comparison. The safety-check result is reused by the
+  fallback path. `_compress_value` is pure, so output is byte-identical; the audit's proposed length-bound
+  heuristic was rejected as unsound (it can skip on a bound that string truncation invalidates).
+- **tests:** Added `TestJsonCompressValueSingleCall` — asserts a single depth-0 compression per call on
+  long-string and large-nested payloads, plus a byte-identical output guard. Verified failing before the fix.
+
+## 2026-07-07 — Extractor dependency packaging
+
+- **packaging:** Added `[extractors]` optional extra for `httpx>=0.27` and included `httpx` in the dev extra so extractor tests have their runtime client dependency declared.
+- **fix(extractors):** Removed import-time `httpx` requirements from Bash and Read extractor modules; type-only imports now stay behind `TYPE_CHECKING`.
+- **tests:** Added a subprocess regression test proving extractor modules import when `httpx` is unavailable.
+- **docs:** README now documents repo/dist/module naming, `[extractors]`, and the local `archolith-context[filter]` sibling install path; architecture docs list optional runtime dependencies.
+
 ## 2026-06-21 — Shared Token Accounting Dependency
 
 - **refactor(shrink):** `shrink.token_counter` now delegates tokenizer selection and fallback token-count policy to `archolith-maintenance`.

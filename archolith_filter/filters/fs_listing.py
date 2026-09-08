@@ -25,29 +25,31 @@ class FsListingFilterOptions:
 
 DEFAULT_OPTS = FsListingFilterOptions()
 
-_IMPORTANT_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"^package\.json$", re.IGNORECASE),
-    re.compile(r"^tsconfig\.json$", re.IGNORECASE),
-    re.compile(r"^Cargo\.toml$", re.IGNORECASE),
-    re.compile(r"^pyproject\.toml$", re.IGNORECASE),
-    re.compile(r"^go\.mod$", re.IGNORECASE),
-    re.compile(r"^Makefile$", re.IGNORECASE),
-    re.compile(r"^Dockerfile$", re.IGNORECASE),
-    re.compile(r"^docker-compose", re.IGNORECASE),
-    re.compile(r"^\.env", re.IGNORECASE),
-    re.compile(r"^README", re.IGNORECASE),
-    re.compile(r"^CHANGELOG", re.IGNORECASE),
-    re.compile(r"^LICENSE", re.IGNORECASE),
-    re.compile(r"^\.gitignore$", re.IGNORECASE),
-    re.compile(r"^\.gitmodules$", re.IGNORECASE),
-    re.compile(r"^src$", re.IGNORECASE),
-    re.compile(r"^lib$", re.IGNORECASE),
-    re.compile(r"^test", re.IGNORECASE),
-    re.compile(r"^spec", re.IGNORECASE),
-    re.compile(r"^__tests__$", re.IGNORECASE),
-    re.compile(r"^src/", re.IGNORECASE),
-    re.compile(r"^lib/", re.IGNORECASE),
-]
+# Single alternation: one regex pass per name instead of 21 sequential matches.
+_IMPORTANT_NAME_PATTERNS: tuple[str, ...] = (
+    r"^package\.json$",
+    r"^tsconfig\.json$",
+    r"^Cargo\.toml$",
+    r"^pyproject\.toml$",
+    r"^go\.mod$",
+    r"^Makefile$",
+    r"^Dockerfile$",
+    r"^docker-compose",
+    r"^\.env",
+    r"^README",
+    r"^CHANGELOG",
+    r"^LICENSE",
+    r"^\.gitignore$",
+    r"^\.gitmodules$",
+    r"^src$",
+    r"^lib$",
+    r"^test",
+    r"^spec",
+    r"^__tests__$",
+    r"^src/",
+    r"^lib/",
+)
+_IMPORTANT_RE = re.compile("|".join(f"(?:{p})" for p in _IMPORTANT_NAME_PATTERNS), re.IGNORECASE)
 
 _ERROR_RE = re.compile(r"Permission denied|No such file|not found|cannot access|cannot open", re.IGNORECASE)
 
@@ -93,7 +95,7 @@ def _minimize_table_whitespace(lines: list[str]) -> list[str]:
 
 def _is_important_entry(entry: str) -> bool:
     basename = entry.rstrip("/").split("/")[-1] if "/" in entry else entry
-    return any(p.match(basename) for p in _IMPORTANT_PATTERNS)
+    return bool(_IMPORTANT_RE.match(basename))
 
 
 def _human_readable_size(size_bytes: int) -> str:
@@ -275,3 +277,6 @@ def fs_listing_filter(formatted: str, opts: FsListingFilterOptions | None = None
 
     result = "\n".join(parts)
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "FsListingFilterOptions", "fs_listing_filter"]

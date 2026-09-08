@@ -101,10 +101,12 @@ def shrink_oversized_tool_results_by_tokens(
         if before_tokens <= max_tokens:
             out.append(msg)
             continue
+        # before_tokens is already an exact count of content; pass it down so the
+        # truncators do not tokenize the same string a second time.
         if msg.name == _READ_FILE_TOOL_NAME:
-            truncated = truncate_read_file_for_tokens(content, max_tokens)
+            truncated = truncate_read_file_for_tokens(content, max_tokens, before_tokens)
         else:
-            truncated = truncate_for_tokens(content, max_tokens)
+            truncated = truncate_for_tokens(content, max_tokens, before_tokens)
         after_tokens = count_tokens(truncated)
         healed_count += 1
         tokens_saved += max(0, before_tokens - after_tokens)
@@ -175,10 +177,17 @@ def shrink_oversized_tool_call_args_by_tokens(
         if not changed:
             out.append(msg)
         else:
+            # Carry tool_call_id and name through the rebuild. Assistant messages
+            # (the only ones reaching this branch) do not populate them in the
+            # OpenAI format, so this is currently a no-op — but rebuilding a
+            # message by listing three of its five fields drops the other two the
+            # moment that stops being true.
             out.append(ChatMessage(
                 role=msg.role,
                 content=msg.content,
                 tool_calls=new_calls,
+                tool_call_id=msg.tool_call_id,
+                name=msg.name,
             ))
 
     return ShrinkTokensResult(

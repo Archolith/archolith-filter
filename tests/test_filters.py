@@ -741,10 +741,29 @@ class TestFilterOutput:
 
 
 class TestToolClassification:
+    @pytest.mark.parametrize("tool_name", ["read", "Read", "READ", "read-file", "read_file", "readfile"])
+    def test_normalize_read_aliases(self, tool_name):
+        import archolith_filter
+
+        assert archolith_filter.normalize_tool_name(tool_name) == "read_file"
+        assert archolith_filter._classify_tool(tool_name, "payload") == "read_file"
+
+    @pytest.mark.parametrize("tool_name", ["grep", "Grep", "rg", "ripgrep", "search", "search_content"])
+    def test_normalize_search_aliases(self, tool_name):
+        import archolith_filter
+
+        assert archolith_filter._classify_tool(tool_name, "payload") == "search"
+
+    @pytest.mark.parametrize("tool_name", ["glob", "Glob", "listdir", "list-directory", "list_directory", "ls"])
+    def test_normalize_directory_aliases(self, tool_name):
+        import archolith_filter
+
+        assert archolith_filter._classify_tool(tool_name, "payload") == "ls-tree"
+
     def test_classify_passthrough_tool(self):
         import archolith_filter
 
-        assert archolith_filter._classify_tool("raw_output", "payload") == "passthrough"
+        assert archolith_filter._classify_tool(" RAW-OUTPUT ", "payload") == "passthrough"
 
     def test_classify_shell_tool(self):
         import archolith_filter
@@ -765,6 +784,30 @@ class TestToolClassification:
         import archolith_filter
 
         assert archolith_filter._classify_tool("custom_tool", "payload") == "generic"
+
+    @pytest.mark.parametrize("tool_name", ["", "   ", None])
+    def test_absent_tool_name_remains_generic(self, tool_name):
+        import archolith_filter
+
+        assert archolith_filter._classify_tool(tool_name, "payload") == "generic"
+
+    def test_shell_alias_is_not_mapped_to_already_filtered_bypass(self):
+        import archolith_filter
+
+        assert archolith_filter.normalize_tool_name("bash") == "bash"
+        assert archolith_filter._classify_tool("bash", "payload") == "generic"
+
+    def test_opencode_read_uses_structural_filter_not_generic_head_tail(self):
+        body = "\n".join(
+            ["def first():", "    return 1"]
+            + [f"def function_{index}():\n    return {index}" for index in range(80)]
+            + ["def last():", "    return 2"]
+        )
+
+        result = filter_output(body, tool="read")
+
+        assert "def function_40():" in result.output
+        assert len(result.output) > len(body) * 0.9
 
 
 # ─── raw output store ───
@@ -1439,3 +1482,169 @@ class TestFilterOutputDedupTracker:
         # Second call with SAME shared tracker
         r2 = filter_output(content, tool="bash", dedupe_tracker=shared_tracker)
         assert "repeated" in r2.output.lower()
+
+
+class TestJsonCompressValueSingleCall:
+    """P0-1 regression: _compress_value must run at most once per json_filter call."""
+
+    @staticmethod
+    def _counting_compress(monkeypatch):
+        from archolith_filter.filters import json_output
+
+        original = json_output._compress_value
+        calls = []
+
+        def counted(value, depth, opts):
+            if depth == 0:
+                calls.append(1)
+            return original(value, depth, opts)
+
+        monkeypatch.setattr(json_output, "_compress_value", counted)
+        return calls
+
+    def test_format_switch_rejected_computes_compression_once(self, monkeypatch):
+        # Long string values make _compress_value truncate, so the format-switch
+        # result loses the size comparison and the fallback path is taken —
+        # the case that previously recomputed the identical string.
+        payload = json.dumps({f"key_{i}": "x" * 5000 for i in range(30)})
+        calls = self._counting_compress(monkeypatch)
+
+        r = json_filter(payload)
+
+        assert len(calls) == 1
+        assert r.output
+
+    def test_large_nested_payload_computes_compression_once(self, monkeypatch):
+        payload = json.dumps(
+            {f"outer_{i}": {f"inner_{j}": "y" * 800 for j in range(12)} for i in range(20)}
+        )
+        calls = self._counting_compress(monkeypatch)
+
+        json_filter(payload)
+
+        assert len(calls) <= 1
+
+    def test_output_unchanged_for_long_string_payload(self):
+        # Byte-identical guard: reuse must not alter the chosen output.
+        payload = json.dumps({f"key_{i}": "x" * 5000 for i in range(30)})
+        from archolith_filter.filters.json_output import DEFAULT_OPTS, _compress_value
+
+        expected = _compress_value(json.loads(payload), 0, DEFAULT_OPTS)
+
+        assert json_filter(payload).output == expected
+
+
+class TestSharedHeaderExtraction:
+    """Wave 1 (L-4/L-5/F-04-adj): build/json filters use the canonical header helper.
+
+    Both previously inlined a copy that recognized only "[exit"/"[killed". A
+    background-job header line therefore stayed in the body, and for json_filter
+    that made json.loads fail, silently dropping the payload to the generic
+    fallback with no JSON compression at all.
+    """
+
+    _PAYLOAD = json.dumps({f"key_{i}": i for i in range(8)})
+
+    def test_job_header_does_not_block_json_compression(self):
+        r = json_filter("[job 2] curl api\n" + self._PAYLOAD)
+        assert r.output.startswith("[job 2] curl api")
+        # Key-value strategy applied: unquoted pairs, no raw JSON braces.
+        assert "key_0: 0" in r.output
+        assert "{" not in r.output
+
+    def test_job_header_output_matches_headerless_body(self):
+        with_header = json_filter("[job 2] curl api\n" + self._PAYLOAD).output
+        without = json_filter(self._PAYLOAD).output
+        assert with_header == "[job 2] curl api\n" + without
+
+    def test_exit_header_still_compresses(self):
+        r = json_filter("[exit 0]\n" + self._PAYLOAD)
+        assert r.output.startswith("[exit 0]")
+        assert "key_0: 0" in r.output
+
+    def test_leading_json_array_stays_in_body(self):
+        # The shared prefixes cannot match a bare "[", so an array is still parsed.
+        payload = json.dumps([{"a": 1, "b": 2}, {"a": 3, "b": 4}, {"a": 5, "b": 6}])
+        r = json_filter(payload)
+        assert r.output.splitlines()[0] == "a,b"
+
+    def test_build_filter_job_header_preserved(self):
+        body = "\n".join(f"Task :compile{i} UP-TO-DATE" for i in range(40))
+        r = build_filter("[job 1] gradle build\n" + body)
+        assert r.output.startswith("[job 1] gradle build")
+
+
+class TestConfigEnvBindings:
+    """Wave 1 (M-7 c8): from_env is table-driven; bindings must stay complete."""
+
+    def test_env_bindings_cover_all_fields(self):
+        from dataclasses import fields as dc_fields
+
+        from archolith_filter.config import _ENV_BINDINGS, FilterConfig
+
+        expected = {f.name for f in dc_fields(FilterConfig)} - {"risk_level"}
+        assert set(_ENV_BINDINGS) == expected
+
+    def test_env_binding_kinds_match_field_types(self):
+        from dataclasses import fields as dc_fields
+
+        from archolith_filter.config import _ENV_BINDINGS, FilterConfig
+
+        by_name = {f.name: f for f in dc_fields(FilterConfig)}
+        for name, binding in _ENV_BINDINGS.items():
+            declared = str(by_name[name].type)
+            assert binding.kind == declared, f"{name}: {binding.kind} vs {declared}"
+
+    def test_int_override_from_env(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_FILTER_GENERIC_HEAD", "7")
+        assert from_env().generic_head == 7
+
+    def test_bool_override_from_env(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_FILTER_JSON_CSV_ENABLED", "0")
+        assert from_env().json_csv_enabled is False
+
+    def test_float_override_is_clamped(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_FILTER_JSON_CSV_FACTOR_THRESHOLD", "5.0")
+        assert from_env().json_csv_factor_threshold == 1.0
+
+    def test_invalid_value_falls_back_to_default(self, monkeypatch):
+        from archolith_filter.config import FilterConfig
+
+        monkeypatch.setenv("ARCHOLITH_FILTER_GENERIC_HEAD", "abc")
+        assert from_env().generic_head == FilterConfig().generic_head
+
+
+class TestWave3Correctness:
+    """Wave 3 fixes from archolith-filter-post-launch-remediation-plan.md."""
+
+    def test_single_omitted_key_is_singular(self):
+        # M-7 (c6): omitted_keys_suffix was an identity function, so the output
+        # read "+1 more keys".
+        data = {f"key_{i}": f"v{i}" for i in range(11)}
+        r = json_filter(json.dumps(data), JsonFilterOptions(kv_enabled=True, kv_min_keys=3, kv_max_keys=10))
+        assert "+1 more key:" in r.output
+        assert "more keys" not in r.output
+
+    def test_multiple_omitted_keys_stay_plural(self):
+        data = {f"key_{i}": f"v{i}" for i in range(30)}
+        r = json_filter(json.dumps(data), JsonFilterOptions(kv_enabled=True, kv_min_keys=3, kv_max_keys=10))
+        assert "+20 more keys:" in r.output
+
+    def test_build_failure_regex_requires_word_boundary(self):
+        # M-5 (c6): bare "error:" matched inside larger tokens. Tested at the
+        # regex level, because both outcomes of the branch using it currently
+        # call generic_filter with identical arguments (see CHANGELOG note).
+        from archolith_filter.filters.build_output import _BUILD_FAILURE_RE
+
+        assert not _BUILD_FAILURE_RE.search("no_error: fine")
+        assert not _BUILD_FAILURE_RE.search("zerror: fine")
+        assert _BUILD_FAILURE_RE.search("error: compilation failed")
+        assert _BUILD_FAILURE_RE.search("  error: indented")
+        assert _BUILD_FAILURE_RE.search("BUILD FAILED")
+
+    def test_cargo_test_and_build_route_differently(self):
+        # M6 (c8): both live in _TEST_BINS and _BUILD_BINS.
+        assert classify_command("cargo test --all").category == CommandCategory.TEST
+        assert classify_command("cargo build --release").category == CommandCategory.BUILD
+        assert classify_command("go test ./...").category == CommandCategory.TEST
+        assert classify_command("go build ./cmd").category == CommandCategory.BUILD

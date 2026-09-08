@@ -10,6 +10,12 @@ Reduction layers:
 
 Depends on `archolith-maintenance` for shared Archolith helper primitives. `tiktoken` is optional for accurate token counting.
 
+## Names
+
+- Repository: `archolith-filter`
+- PyPI distribution: `archolith-filter`
+- Python package: `archolith_filter`
+
 ## Quick Start
 
 ```bash
@@ -17,6 +23,9 @@ pip install -e .
 
 # Optional: install with accurate token counting
 pip install -e ".[tokenizer]"
+
+# Optional: install extractor runtime dependencies
+pip install -e ".[extractors]"
 ```
 
 ```python
@@ -47,13 +56,16 @@ Two more optional extras:
   `archolith-context` and `archolith-mcp-audit` always pull `tiktoken` as
   a hard dependency, so the heuristic fallback is just a development
   convenience path here.
+- `[extractors]` — installs `httpx` for the Bash/Read extractor plugins.
+  The extractor modules import without this extra, but running them requires
+  an `httpx.AsyncClient` from the host integration.
 - `[context]` — installs `archolith-proxy>=0.1.0`, the local clone of
   `archolith-context`'s proxy module. **Note**: `archolith-proxy` is not
   published to PyPI yet, so this extra currently fails on
   a fresh checkout. For local development against a checked-out
   `archolith-context` worktree, point `pip` at the local clone
-  (`pip install -e "../archolith-context[archolith_filter]"`) instead.
-  Distribution is tracked in the separate `ARCHOLITH-FILTER-DISTRIBUTION-PLAN` follow-up.
+  (`pip install -e "../archolith-context[filter]"`) instead.
+  Distribution is tracked in the workspace `ARCHOLITH-DISTRIBUTION-PLAN` follow-up.
 
 ## Documentation
 

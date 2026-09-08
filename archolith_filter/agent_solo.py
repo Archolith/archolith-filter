@@ -327,6 +327,9 @@ def _filter_middle_messages(
 
     Returns (processed_middle, chars_saved).
     """
+    # Deferred to break a circular import: archolith_filter/__init__ imports this
+    # module (Layer 3) at package import time, so agent_solo cannot import
+    # filter_output from it at module scope.
     from . import filter_output
 
     result: list[dict[str, Any]] = []

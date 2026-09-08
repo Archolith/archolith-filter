@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from ..normalize import normalize_runtime_noise
 from . import FilterResult
-from .generic import GenericFilterOptions, generic_filter
+from .generic import GenericFilterOptions, _extract_header, generic_filter
 
 
 @dataclass(frozen=True)
@@ -35,7 +35,9 @@ _BUILD_SUCCESS_RE = re.compile(
 )
 # Build failure markers
 _BUILD_FAILURE_RE = re.compile(
-    r"BUILD FAILED|BUILD FAILURE|FAILURE|error:",
+    # \berror: so "error:" matches as a word, not inside identifiers such as
+    # "no_error:" or "SyntaxError:" written mid-token.
+    r"BUILD FAILED|BUILD FAILURE|FAILURE|\berror:",
     re.IGNORECASE,
 )
 # Warning lines to preserve even on success
@@ -100,17 +102,7 @@ def build_filter(formatted: str, opts: BuildFilterOptions | None = None) -> Filt
         return generic_filter(formatted, GenericFilterOptions(head_lines=opts.head_lines, tail_lines=opts.tail_lines))
 
     lines = formatted.split("\n")
-    header: list[str] = []
-    body_start = 0
-    for i, ln in enumerate(lines):
-        if ln.startswith("$ ") or (ln.startswith("[") and (ln.startswith("[exit") or ln.startswith("[killed"))):
-            body_start = i + 1
-        elif ln == "" and body_start == i:
-            body_start = i + 1
-        else:
-            break
-    header = lines[:body_start]
-    body = lines[body_start:]
+    header, body = _extract_header(lines)
 
     if not body:
         return FilterResult(output=formatted, raw_chars=raw_chars, filtered_chars=raw_chars, truncated=False)
@@ -155,3 +147,6 @@ def build_filter(formatted: str, opts: BuildFilterOptions | None = None) -> Filt
     result = "\n".join(parts)
     truncated = len(result) < raw_chars
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=truncated)
+
+
+__all__ = ["BuildFilterOptions", "DEFAULT_OPTS", "build_filter"]

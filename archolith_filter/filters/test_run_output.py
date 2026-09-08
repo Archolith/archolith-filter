@@ -33,3 +33,6 @@ def filter_test_output(formatted: str, opts: TestFilterOptions | None = None) ->
         formatted = normalize_runtime_noise(formatted)
 
     return generic_filter(formatted, GenericFilterOptions(head_lines=opts.head_lines, tail_lines=opts.tail_lines))
+
+
+__all__ = ["DEFAULT_OPTS", "TestFilterOptions", "filter_test_output"]

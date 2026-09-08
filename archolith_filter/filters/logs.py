@@ -20,20 +20,21 @@ class LogFilterOptions:
 
 DEFAULT_OPTS = LogFilterOptions()
 
-_IMPORTANT_PATTERNS: list[re.Pattern[str]] = [
-    # Readiness / server banners
-    re.compile(r"\blistening on\b", re.IGNORECASE),
-    re.compile(r"\blocal:\s+https?://", re.IGNORECASE),
-    re.compile(r"\bhttps?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::\d+)?\b", re.IGNORECASE),
-    re.compile(r"\b(?:ready|server started|started server|app listening|compiled successfully)\b", re.IGNORECASE),
-    re.compile(r"\bbuild complete(?:d)?\b", re.IGNORECASE),
-    re.compile(r"\bready in \d+", re.IGNORECASE),
-    re.compile(r"\bstartup (?:complete|finished)\b", re.IGNORECASE),
-    # Errors and warnings
-    re.compile(r"\b(error|fatal|critical|panic|abort|segfault|core dump)\b", re.IGNORECASE),
-    re.compile(r"\b(warn(?:ing)?|deprecated|caution)\b", re.IGNORECASE),
-    re.compile(r"\b(fail(?:ed|ure)?|exception|unhandled|uncaught)\b", re.IGNORECASE),
-]
+# Single alternation: one regex pass per line instead of 10 sequential searches.
+# Readiness/server banners first, then errors and warnings.
+_IMPORTANT_LINE_PATTERNS: tuple[str, ...] = (
+    r"\blistening on\b",
+    r"\blocal:\s+https?://",
+    r"\bhttps?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::\d+)?\b",
+    r"\b(?:ready|server started|started server|app listening|compiled successfully)\b",
+    r"\bbuild complete(?:d)?\b",
+    r"\bready in \d+",
+    r"\bstartup (?:complete|finished)\b",
+    r"\b(error|fatal|critical|panic|abort|segfault|core dump)\b",
+    r"\b(warn(?:ing)?|deprecated|caution)\b",
+    r"\b(fail(?:ed|ure)?|exception|unhandled|uncaught)\b",
+)
+_IMPORTANT_RE = re.compile("|".join(f"(?:{p})" for p in _IMPORTANT_LINE_PATTERNS), re.IGNORECASE)
 
 
 def _collapse_duplicate_runs(lines: list[str], max_dupes: int) -> list[str]:
@@ -62,7 +63,7 @@ def _collapse_duplicate_runs(lines: list[str], max_dupes: int) -> list[str]:
 
 def _extract_important_lines(lines: list[str]) -> list[str]:
     """Extract lines matching readiness/error/warning patterns."""
-    return [ln for ln in lines if any(p.search(ln) for p in _IMPORTANT_PATTERNS)]
+    return [ln for ln in lines if _IMPORTANT_RE.search(ln)]
 
 
 def log_filter(formatted: str, opts: LogFilterOptions | None = None) -> FilterResult:
@@ -104,3 +105,6 @@ def log_filter(formatted: str, opts: LogFilterOptions | None = None) -> FilterRe
         result = "\n".join(header + head + ["", marker, ""] + tail)
 
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "LogFilterOptions", "log_filter"]

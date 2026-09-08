@@ -253,3 +253,6 @@ def search_filter(formatted: str, opts: SearchFilterOptions | None = None) -> Fi
 
     result = "\n".join(parts)
     return FilterResult(output=result, raw_chars=raw_chars, filtered_chars=len(result), truncated=True)
+
+
+__all__ = ["DEFAULT_OPTS", "SearchFilterOptions", "search_filter"]
