@@ -9,7 +9,7 @@ bundled in source form within the archolith-filter distribution; users install
 them through normal pip / PEP 517 workflows.
 
 This file is provided for compliance and attribution purposes; it does not
-modify the archolith-filter license (PolyForm Noncommercial 1.0.0) declared
+modify the archolith-filter license (Apache-2.0) declared
 in pyproject.toml.
 
 
