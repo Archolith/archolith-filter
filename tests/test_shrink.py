@@ -71,6 +71,10 @@ class TestTruncateForChars:
         text = "HEAD" + "x" * 4000 + "TAIL"
         result = truncate_for_chars(text, 500)
         assert "TAIL" in result
+        # Preserving the tail is only meaningful if the middle was actually
+        # dropped -- a no-op truncator satisfies "TAIL" in result trivially.
+        assert len(result) < len(text)
+        assert "x" * 4000 not in result
 
 
 # ─── truncate_for_tokens ───
@@ -227,6 +231,9 @@ class TestShrinkToolResultsChars:
         # user and assistant unchanged
         assert result.messages[0].content == "u" * 5000
         assert result.messages[2].content == "a" * 5000
+        # ...and the tool message -- the one this test is named for -- did shrink.
+        assert result.messages[1].content != "t" * 5000
+        assert len(result.messages[1].content) < 5000
 
     def test_multiple_tool_messages(self):
         msgs = [
@@ -236,6 +243,11 @@ class TestShrinkToolResultsChars:
         ]
         result = shrink_oversized_tool_results(msgs, 1000)
         assert result.healed_count == 2
+        # healed_count alone is bookkeeping: assert the content actually shrank,
+        # and that the under-budget message was left alone.
+        assert result.messages[0].content == "small"
+        assert len(result.messages[1].content) < 3000
+        assert len(result.messages[2].content) < 5000
 
     def test_read_file_tool_message_uses_declaration_aware_truncation(self):
         code_lines = ["import os"] + [f"import mod{i}" for i in range(200)]
