@@ -120,3 +120,42 @@ class TestPathNormalization:
 
         reset_path_config()
         assert paths._cached_config is None
+
+
+class TestWorkspaceRootFallback:
+    """Wave 2 (H3-dg): falling back to CWD is warned about, not silent."""
+
+    def test_warns_when_no_env_var_and_no_git_root(self, tmp_path, monkeypatch, caplog):
+        from archolith_filter import paths
+
+        monkeypatch.delenv("ARCHOLITH_FILTER_WORKSPACE_ROOT", raising=False)
+        monkeypatch.delenv("ARCHOLITH_RTK_WORKSPACE_ROOT", raising=False)
+        monkeypatch.chdir(tmp_path)
+
+        with caplog.at_level("WARNING", logger="archolith_filter.paths"):
+            root = paths._find_workspace_root()
+
+        assert root == str(tmp_path)
+        assert "could not detect a workspace root" in caplog.text
+
+    def test_no_warning_when_env_var_set(self, tmp_path, monkeypatch, caplog):
+        from archolith_filter import paths
+
+        monkeypatch.setenv("ARCHOLITH_FILTER_WORKSPACE_ROOT", str(tmp_path))
+        with caplog.at_level("WARNING", logger="archolith_filter.paths"):
+            root = paths._find_workspace_root()
+
+        assert root == str(tmp_path)
+        assert caplog.text == ""
+
+    def test_project_roots_discovered_two_levels_down(self, tmp_path):
+        from archolith_filter import paths
+
+        (tmp_path / "projects" / "orgA" / "proj1").mkdir(parents=True)
+        (tmp_path / "projects" / "orgA" / "proj2").mkdir(parents=True)
+        (tmp_path / "projects" / "orgB" / "proj3").mkdir(parents=True)
+        (tmp_path / "projects" / "orgA" / "loose.txt").write_text("x")
+
+        roots = paths._infer_project_roots(str(tmp_path))
+
+        assert sorted(r.rsplit("/", 1)[-1] for r in roots) == ["proj1", "proj2", "proj3"]

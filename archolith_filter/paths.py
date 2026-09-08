@@ -11,11 +11,15 @@ Multi-project handling:
 Root detection strategies (priority order):
     1. ``ARCHOLITH_FILTER_WORKSPACE_ROOT`` env var (or ``ARCHOLITH_RTK_WORKSPACE_ROOT`` for backward compatibility)
     2. Git-based: walk up from CWD to find ``.git`` directory
-    3. Common-prefix inference from all paths in current output (fallback)
+    3. Fallback: the current working directory, with a warning — normalization
+       silently does nothing useful when the detected root is wrong, so set
+       ``ARCHOLITH_FILTER_WORKSPACE_ROOT`` explicitly when running outside a
+       git checkout.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -53,6 +57,9 @@ _CANDIDATE_ROOTS = [
 ]
 
 
+_log = logging.getLogger(__name__)
+
+
 def _find_workspace_root() -> str:
     """Detect workspace root via env var or git walk."""
     # 1. Explicit env var (prefer new ARCHOLITH_FILTER_* name, fall back to RTK name).
@@ -76,7 +83,15 @@ def _find_workspace_root() -> str:
             break
         current = parent
 
-    # 3. Fallback: CWD itself.
+    # 3. Fallback: CWD itself. This is the only signal the caller gets that
+    # normalization is about to run against a root nobody chose.
+    _log.warning(
+        "archolith-filter could not detect a workspace root: "
+        "ARCHOLITH_FILTER_WORKSPACE_ROOT is unset and no .git directory was found "
+        "above %s. Falling back to the current directory; path normalization may "
+        "not match your layout.",
+        cwd,
+    )
     return cwd
 
 
@@ -92,14 +107,17 @@ def _infer_project_roots(workspace_root: str) -> list[str]:
     # Look for a projects/ directory with subdirectories.
     projects_dir = os.path.join(workspace_root, "projects")
     if os.path.isdir(projects_dir):
+        # scandir reports directory-ness from the directory entry, avoiding a
+        # separate stat per candidate. Runs once: get_path_config caches.
         roots: list[str] = []
-        for org in os.listdir(projects_dir):
-            org_path = os.path.join(projects_dir, org)
-            if os.path.isdir(org_path):
-                for proj in os.listdir(org_path):
-                    proj_path = os.path.join(org_path, proj)
-                    if os.path.isdir(proj_path):
-                        roots.append(proj_path.replace("\\", "/"))
+        with os.scandir(projects_dir) as orgs:
+            for org in orgs:
+                if not org.is_dir():
+                    continue
+                with os.scandir(org.path) as projs:
+                    for proj in projs:
+                        if proj.is_dir():
+                            roots.append(proj.path.replace("\\", "/"))
         if roots:
             return roots
 
