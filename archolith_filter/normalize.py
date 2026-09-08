@@ -68,7 +68,9 @@ def normalize_runtime_noise(text: str) -> str:
     # PIDs.
     result = _PID_RE.sub("[PID]", result)
 
-    # Elapsed times (ms before s to avoid partial match on "1.5ms").
+    # Elapsed times. Both patterns require a word boundary after their unit, so
+    # the seconds pattern cannot match the "s" in "1.5ms" and this order is not
+    # load-bearing — it reads ms-then-s only for consistency with the units.
     result = _ELAPSED_MS_RE.sub("[X]ms", result)
     result = _ELAPSED_SEC_RE.sub("[X]s", result)
 

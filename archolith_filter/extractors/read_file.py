@@ -72,7 +72,18 @@ class ReadFileFilterExtractor(FilterExtractorBase):
 
     def _detect_annotations(self, content: str) -> list[str]:
         """Run archolith-filter's read_file_filter to detect structural characteristics."""
-        from archolith_filter.filters.read_file import ReadFileFilterOptions, read_file_filter
+        # Imported inside the method, not at module scope: extractors are loaded
+        # by hosts that may not use Layer 1 at all, and this keeps the filter
+        # import off the extractor package's import path.
+        from archolith_filter.filters.read_file import (
+            MARKER_COMMENT,
+            MARKER_CSS,
+            MARKER_GENERATED,
+            MARKER_IMPORT,
+            MARKER_MINIFIED,
+            ReadFileFilterOptions,
+            read_file_filter,
+        )
 
         if not content.strip():
             return []
@@ -91,13 +102,13 @@ class ReadFileFilterExtractor(FilterExtractorBase):
         # If the filter compressed the output, examine the markers it left
         filtered = result.output
 
-        if "import lines omitted" in filtered:
+        if MARKER_IMPORT in filtered:
             annotations.append("import-heavy")
-        if "generated lines omitted" in filtered or "minified lines omitted" in filtered:
+        if MARKER_GENERATED in filtered or MARKER_MINIFIED in filtered:
             annotations.append("generated file, collapsed")
-        if "CSS body lines omitted" in filtered:
+        if MARKER_CSS in filtered:
             annotations.append("stylesheet")
-        if "comment lines omitted" in filtered:
+        if MARKER_COMMENT in filtered:
             annotations.append("comment-heavy")
 
         return annotations

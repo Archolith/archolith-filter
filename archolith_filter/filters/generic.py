@@ -118,7 +118,9 @@ def _detect_stack_trace(lines: list[str], min_frames: int) -> list[tuple[int, in
 
     # Final run
     if current_start is not None and len(lines) - current_start >= min_frames:
-        runs.append((current_start, len(lines), current_lang))  # type: ignore[arg-type]
+        # current_lang is always assigned together with current_start.
+        assert current_lang is not None
+        runs.append((current_start, len(lines), current_lang))
 
     return runs if runs else None
 
