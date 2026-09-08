@@ -37,16 +37,15 @@ def truncate_for_chars(text: str, max_chars: int) -> str:
     return f"{head}{marker}{tail}"
 
 
-def truncate_for_tokens(text: str, max_tokens: int) -> str:
+def truncate_for_tokens(text: str, max_tokens: int, text_tokens: int | None = None) -> str:
     """Truncate text to max_tokens using tiktoken if available.
 
     Never tokenizes full input — uses iterative convergence to avoid
-    pathological cost on repetitive text.
+    pathological cost on repetitive text. Pass *text_tokens* when the caller has
+    already counted the text, to skip re-tokenizing it here.
     """
     if max_tokens <= 0:
         return ""
-    if len(text) <= max_tokens:
-        return text
     # Every token is >=1 char, so if length <= budget, tokens <= budget.
     if len(text) <= max_tokens:
         return text
@@ -54,7 +53,8 @@ def truncate_for_tokens(text: str, max_tokens: int) -> str:
     # are intentionally conservative estimates, so continue through truncation
     # instead of returning an optimistic "fits" decision.
     if not token_counts_are_estimated() and len(text) <= max_tokens * _CHARS_PER_TOKEN_ESTIMATE:
-        if count_tokens(text) <= max_tokens:
+        total = text_tokens if text_tokens is not None else count_tokens(text)
+        if total <= max_tokens:
             return text
 
     content_budget = max(0, max_tokens - _MARKER_TOKEN_OVERHEAD)

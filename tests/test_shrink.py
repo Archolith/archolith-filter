@@ -485,3 +485,44 @@ class TestChatMessage:
         assert restored.tool_calls is not None
         assert len(restored.tool_calls) == 1
         assert restored.tool_calls[0].function.name == "run"
+
+
+class TestKnownTokenCountReuse:
+    """Wave 2 (F-14/F-03): callers may pass an already-computed token count."""
+
+    # In the band max_tokens < len(text) <= max_tokens * 3.2 the truncators used
+    # to re-tokenize a string the orchestrator had just counted.
+    CONTENT = "!@#$%^&*()_+{}|:<>?" * 15
+    BUDGET = 100
+
+    def test_passing_known_count_matches_omitting_it(self):
+        assert truncate_for_tokens(self.CONTENT, self.BUDGET) == truncate_for_tokens(
+            self.CONTENT, self.BUDGET, count_tokens(self.CONTENT)
+        )
+
+    def test_read_file_passing_known_count_matches_omitting_it(self):
+        assert truncate_read_file_for_tokens(self.CONTENT, self.BUDGET) == truncate_read_file_for_tokens(
+            self.CONTENT, self.BUDGET, count_tokens(self.CONTENT)
+        )
+
+    def test_orchestrator_does_not_recount_the_same_string(self, monkeypatch):
+        import archolith_filter.shrink.orchestrator as orch
+        import archolith_filter.shrink.truncate as tr
+
+        if token_counter_module.token_counts_are_estimated():
+            pytest.skip("exact tokenizer required to reach the recount branch")
+
+        seen: list[int] = []
+        for module in (orch, tr):
+            real = module.count_tokens
+
+            def counted(text, _real=real):
+                seen.append(len(text))
+                return _real(text)
+
+            monkeypatch.setattr(module, "count_tokens", counted)
+
+        msgs = [ChatMessage(role="tool", content=self.CONTENT, tool_call_id="t1", name="bash")]
+        orch.shrink_oversized_tool_results_by_tokens(msgs, self.BUDGET)
+
+        assert seen.count(len(self.CONTENT)) == 2

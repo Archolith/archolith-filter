@@ -156,14 +156,18 @@ def truncate_read_file_for_chars(text: str, max_chars: int) -> str:
     return "\n".join(head_decl) + marker + "\n".join(tail_decl)
 
 
-def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
+def truncate_read_file_for_tokens(
+    text: str, max_tokens: int, text_tokens: int | None = None
+) -> str:
     """Structure-aware token-budget truncation for read_file tool output."""
     if max_tokens <= 0:
         return ""
     if len(text) <= max_tokens:
         return text
-    if len(text) <= max_tokens * _CHARS_PER_TOKEN_ESTIMATE and count_tokens(text) <= max_tokens:
-        return text
+    if len(text) <= max_tokens * _CHARS_PER_TOKEN_ESTIMATE:
+        total = text_tokens if text_tokens is not None else count_tokens(text)
+        if total <= max_tokens:
+            return text
 
     lines = text.split("\n")
     result_lines = _collapse_imports_and_comments(lines)
@@ -177,7 +181,10 @@ def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
         return truncate_for_tokens(text, max_tokens)
 
     content_budget = max(0, max_tokens - _MARKER_TOKEN_OVERHEAD)
-    total_decl_tokens = sum(count_tokens(line) for line in decl_lines)
+    # Tokenize each declaration once; the head and tail budgets below reuse these
+    # counts instead of re-tokenizing the same lines.
+    decl_tokens = [count_tokens(line) for line in decl_lines]
+    total_decl_tokens = sum(decl_tokens)
     if total_decl_tokens <= content_budget:
         marker = f"\n\n[…read_file compressed: {len(lines) - len(decl_lines)} non-declaration lines omitted…]\n\n"
         return "\n".join(decl_lines) + marker
@@ -187,8 +194,7 @@ def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
     head_decl: list[str] = []
     tail_decl: list[str] = []
     acc = 0
-    for dl in decl_lines:
-        tokens = count_tokens(dl)
+    for dl, tokens in zip(decl_lines, decl_tokens):
         if acc + tokens <= head_budget:
             head_decl.append(dl)
             acc += tokens
@@ -196,10 +202,9 @@ def truncate_read_file_for_tokens(text: str, max_tokens: int) -> str:
             break
 
     tail_acc = 0
-    for dl in reversed(decl_lines):
+    for dl, tokens in zip(reversed(decl_lines), reversed(decl_tokens)):
         if dl in head_decl:
             break
-        tokens = count_tokens(dl)
         if tail_acc + tokens <= tail_budget:
             tail_decl.insert(0, dl)
             tail_acc += tokens
