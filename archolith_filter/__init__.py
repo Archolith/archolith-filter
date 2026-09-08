@@ -150,13 +150,11 @@ def _is_binary_output(text: str) -> tuple[bool, int, float]:
 
     Returns (is_binary, nul_count, text_ratio).
     """
-    nul_count = 0
-    scan_chars = min(len(text), _BINARY_SCAN_BYTES)
-    for ch in text[:scan_chars]:
-        if ch == '\x00':
-            nul_count += 1
-            if nul_count > _BINARY_NUL_THRESHOLD:
-                break
+    # str.count runs in C; the previous per-character Python loop scanned up to
+    # 64k chars on every tool result. It also stopped at the threshold, so the
+    # reported count was always threshold+1 — this reports the real count in the
+    # scan window.
+    nul_count = text[:_BINARY_SCAN_BYTES].count('\x00')
 
     if nul_count <= _BINARY_NUL_THRESHOLD:
         return False, nul_count, 1.0

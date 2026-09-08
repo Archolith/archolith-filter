@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import time
+from collections import deque
 from dataclasses import dataclass
+from functools import lru_cache
+from typing import Any
 
 # Heuristic: ~4 chars per token for English/code text.
 CHARS_PER_TOKEN = 4
@@ -11,6 +14,18 @@ CHARS_PER_TOKEN = 4
 
 def _estimate_tokens_heuristic(char_count: int) -> int:
     return round(char_count / CHARS_PER_TOKEN)
+
+
+@lru_cache(maxsize=1)
+def _tiktoken_encoding() -> Any:
+    """Return the cl100k_base encoding, built once per process.
+
+    Only successful results are cached, so an environment without tiktoken keeps
+    falling back on every call exactly as before.
+    """
+    import tiktoken
+
+    return tiktoken.get_encoding("cl100k_base")
 
 
 @dataclass(frozen=True)
@@ -48,12 +63,12 @@ class FilterTelemetryStore:
     """Session-scoped telemetry store."""
 
     def __init__(self, max_entries: int = 10_000) -> None:
-        self._entries: list[FilterTelemetryEntry] = []
+        # deque with maxlen evicts the oldest entry on append in O(1); list.pop(0)
+        # was O(n) and ran on every record once the store was full.
+        self._entries: deque[FilterTelemetryEntry] = deque(maxlen=max_entries)
         self._max_entries = max_entries
 
     def record(self, entry: FilterTelemetryEntry) -> None:
-        if len(self._entries) >= self._max_entries:
-            self._entries.pop(0)
         self._entries.append(entry)
 
     @property
@@ -195,9 +210,7 @@ def record_filter_telemetry_with_tokens(
 
     # Use tiktoken if available, otherwise heuristic.
     try:
-        import tiktoken
-
-        enc = tiktoken.get_encoding("cl100k_base")
+        enc = _tiktoken_encoding()
         raw_tokens = len(enc.encode(raw_text))
         filtered_tokens = len(enc.encode(filtered_text))
         is_estimate = False
