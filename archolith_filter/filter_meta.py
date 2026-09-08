@@ -1,11 +1,9 @@
-"""Filter metadata — exit code parsing, verbose flag detection, timeout detection."""
+"""Filter metadata — exit code parsing and timeout detection."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-
-from ._patterns import is_verbose_command  # noqa: F401 — re-exported from __init__
 
 
 @dataclass(frozen=True)

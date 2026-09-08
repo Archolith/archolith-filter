@@ -1572,3 +1572,43 @@ class TestSharedHeaderExtraction:
         body = "\n".join(f"Task :compile{i} UP-TO-DATE" for i in range(40))
         r = build_filter("[job 1] gradle build\n" + body)
         assert r.output.startswith("[job 1] gradle build")
+
+
+class TestConfigEnvBindings:
+    """Wave 1 (M-7 c8): from_env is table-driven; bindings must stay complete."""
+
+    def test_env_bindings_cover_all_fields(self):
+        from dataclasses import fields as dc_fields
+
+        from archolith_filter.config import _ENV_BINDINGS, FilterConfig
+
+        expected = {f.name for f in dc_fields(FilterConfig)} - {"risk_level"}
+        assert set(_ENV_BINDINGS) == expected
+
+    def test_env_binding_kinds_match_field_types(self):
+        from dataclasses import fields as dc_fields
+
+        from archolith_filter.config import _ENV_BINDINGS, FilterConfig
+
+        by_name = {f.name: f for f in dc_fields(FilterConfig)}
+        for name, binding in _ENV_BINDINGS.items():
+            declared = str(by_name[name].type)
+            assert binding.kind == declared, f"{name}: {binding.kind} vs {declared}"
+
+    def test_int_override_from_env(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_FILTER_GENERIC_HEAD", "7")
+        assert from_env().generic_head == 7
+
+    def test_bool_override_from_env(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_FILTER_JSON_CSV_ENABLED", "0")
+        assert from_env().json_csv_enabled is False
+
+    def test_float_override_is_clamped(self, monkeypatch):
+        monkeypatch.setenv("ARCHOLITH_FILTER_JSON_CSV_FACTOR_THRESHOLD", "5.0")
+        assert from_env().json_csv_factor_threshold == 1.0
+
+    def test_invalid_value_falls_back_to_default(self, monkeypatch):
+        from archolith_filter.config import FilterConfig
+
+        monkeypatch.setenv("ARCHOLITH_FILTER_GENERIC_HEAD", "abc")
+        assert from_env().generic_head == FilterConfig().generic_head

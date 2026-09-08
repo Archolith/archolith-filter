@@ -10,8 +10,8 @@ from __future__ import annotations
 import re
 
 # ---------------------------------------------------------------------------
-# Verbose flag detection — used by filter_meta.is_verbose_command and
-# config.is_verbose_command. The patterns below are pre-compiled at import
+# Verbose flag detection — defined here and re-exported by config (the single
+# canonical re-export point). The patterns below are pre-compiled at import
 # time into VERBOSE_FLAG_PATTERNS so callers share one compiled regex set
 # rather than recompiling on every call.
 # ---------------------------------------------------------------------------
