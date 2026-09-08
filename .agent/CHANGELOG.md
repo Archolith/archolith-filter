@@ -4,6 +4,15 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-09-07 — Post-launch remediation: P0-1 (deferred High)
+
+- **perf(json_output):** `json_filter` no longer computes `_compress_value(parsed, 0, opts)` twice when a
+  format-switch strategy applies but loses the size comparison. The safety-check result is reused by the
+  fallback path. `_compress_value` is pure, so output is byte-identical; the audit's proposed length-bound
+  heuristic was rejected as unsound (it can skip on a bound that string truncation invalidates).
+- **tests:** Added `TestJsonCompressValueSingleCall` — asserts a single depth-0 compression per call on
+  long-string and large-nested payloads, plus a byte-identical output guard. Verified failing before the fix.
+
 ## 2026-07-07 — Extractor dependency packaging
 
 - **packaging:** Added `[extractors]` optional extra for `httpx>=0.27` and included `httpx` in the dev extra so extractor tests have their runtime client dependency declared.

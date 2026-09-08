@@ -444,10 +444,16 @@ def json_filter(formatted: str, opts: JsonFilterOptions | None = None) -> Filter
         if _is_flat_object(parsed, min_keys=opts.kv_min_keys):
             format_result = _serialize_kv(parsed, opts)
 
+    # Recursive-compression result, computed at most once. The safety check
+    # below and the fallback path need the same value; _compress_value is pure,
+    # so the second call was recomputing an identical string.
+    compressed: str | None = None
+
     # Safety check: only use format-switch result if it's actually shorter
     # than what truncation would produce.
     if format_result is not None:
-        truncated = _compress_value(parsed, 0, opts)
+        compressed = _compress_value(parsed, 0, opts)
+        truncated = compressed
         # Include header length in comparison
         header_len = len("\n".join(tool_header) + "\n") if tool_header else 0
         format_total = header_len + len(format_result)
@@ -466,8 +472,10 @@ def json_filter(formatted: str, opts: JsonFilterOptions | None = None) -> Filter
                 truncated=truncated_flag,
             )
 
-    # Fallback: original recursive compression
-    compressed = _compress_value(parsed, 0, opts)
+    # Fallback: original recursive compression (reused when the safety check
+    # above already computed it).
+    if compressed is None:
+        compressed = _compress_value(parsed, 0, opts)
     result = "\n".join(tool_header + [compressed])
 
     truncated = len(result) < raw_chars

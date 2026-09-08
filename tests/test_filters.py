@@ -1482,3 +1482,53 @@ class TestFilterOutputDedupTracker:
         # Second call with SAME shared tracker
         r2 = filter_output(content, tool="bash", dedupe_tracker=shared_tracker)
         assert "repeated" in r2.output.lower()
+
+
+class TestJsonCompressValueSingleCall:
+    """P0-1 regression: _compress_value must run at most once per json_filter call."""
+
+    @staticmethod
+    def _counting_compress(monkeypatch):
+        from archolith_filter.filters import json_output
+
+        original = json_output._compress_value
+        calls = []
+
+        def counted(value, depth, opts):
+            if depth == 0:
+                calls.append(1)
+            return original(value, depth, opts)
+
+        monkeypatch.setattr(json_output, "_compress_value", counted)
+        return calls
+
+    def test_format_switch_rejected_computes_compression_once(self, monkeypatch):
+        # Long string values make _compress_value truncate, so the format-switch
+        # result loses the size comparison and the fallback path is taken —
+        # the case that previously recomputed the identical string.
+        payload = json.dumps({f"key_{i}": "x" * 5000 for i in range(30)})
+        calls = self._counting_compress(monkeypatch)
+
+        r = json_filter(payload)
+
+        assert len(calls) == 1
+        assert r.output
+
+    def test_large_nested_payload_computes_compression_once(self, monkeypatch):
+        payload = json.dumps(
+            {f"outer_{i}": {f"inner_{j}": "y" * 800 for j in range(12)} for i in range(20)}
+        )
+        calls = self._counting_compress(monkeypatch)
+
+        json_filter(payload)
+
+        assert len(calls) <= 1
+
+    def test_output_unchanged_for_long_string_payload(self):
+        # Byte-identical guard: reuse must not alter the chosen output.
+        payload = json.dumps({f"key_{i}": "x" * 5000 for i in range(30)})
+        from archolith_filter.filters.json_output import DEFAULT_OPTS, _compress_value
+
+        expected = _compress_value(json.loads(payload), 0, DEFAULT_OPTS)
+
+        assert json_filter(payload).output == expected
