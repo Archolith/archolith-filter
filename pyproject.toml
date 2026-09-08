@@ -8,16 +8,15 @@ version = "0.1.0"
 description = "Token Reduction Toolkit — deterministic output filtering for LLM agent contexts"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
+license = "Apache-2.0"
 authors = [{ name = "Charles Harvey", email = "ctharvey@me.com" }]
 keywords = ["llm", "token-reduction", "output-filtering", "agent"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    # Note: "License :: Other/Proprietary License" classifier removed (deprecated).
-    # The project uses a custom PolyForm Noncommercial license; the
-    # `license = "LicenseRef-PolyForm-Noncommercial-1.0.0"` field above is
-    # the canonical declaration.
+    # Note: License :: classifiers are deprecated under PEP 639. The
+    # `license = "Apache-2.0"` SPDX expression above is the canonical
+    # declaration.
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
