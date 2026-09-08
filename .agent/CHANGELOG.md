@@ -4,6 +4,37 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-09-07 — Post-launch remediation: Wave 4 (robustness / coupling)
+
+- **refactor(extractors):** collapse-marker phrases are now named constants in `filters/read_file.py`,
+  emitted there and imported by the read_file extractor, which previously matched hand-typed English
+  strings (F-12).
+- **fix(shrink):** the assistant-path message rebuild carries `tool_call_id` and `name` instead of listing
+  three of five fields. No live impact — assistant messages do not populate them in the OpenAI format — but
+  the trap is closed and covered by a test (F-15).
+- **docs:** documented both deferred imports (F-11, L5). The `agent_solo` one breaks a verified cycle:
+  `__init__` imports `agent_solo` at package import time.
+- **refactor(generic):** `# type: ignore[arg-type]` replaced with an assert narrowing `current_lang` (L6 c6).
+- **docs(normalize):** the "ms before s" comment claimed an ordering that does not matter; both patterns are
+  word-boundary anchored, verified identical output in both orders across seven samples (L8 c8).
+- **docs(read_file):** boundary-index comments on the two "one past the end" slices (L2, L3 c6).
+- **no change needed:** F-09 (c7) — the global `_count_tokens_fn` is gone with the archolith-maintenance
+  delegation; L1 (c8) — dedupe's CPython dict-order dependence is already documented in-code.
+
+**Plan complete.** All four waves plus the deferred High (P0-1) are done. Of the plan's ~46 findings: 34
+fixed, 6 were already fixed before this session, 3 needed no change (M-6, F-09, L1), 1 dropped as not
+reproducible (M-8), and 2 are recorded as unproven or ineffective (F-05 is a guard with no demonstrated
+behavior change; M-5 has no observable effect because the branch consuming its regex is dead — see below).
+
+**Follow-ups discovered, not in the plan:**
+- `build_output.py`: the build-failure branch and the branch below it call `generic_filter` with identical
+  arguments, so the failure check cannot change the output. Needs a decision about what a detected failure
+  should do differently.
+- `json_output.py`: the array path still prints "+1 more items" — the same plural defect as M-7, which
+  covered keys only.
+- `truncate_for_tokens` has the same marker-floor issue F-13 fixed for `truncate_for_chars`: budgets smaller
+  than the marker still overflow (~25 tokens at budget 5).
+
 ## 2026-09-07 — Post-launch remediation: Wave 3 (correctness edge cases)
 
 - **fix(json_output):** `omitted_keys_suffix` was an identity function bypassed by two of its three call
