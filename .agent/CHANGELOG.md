@@ -4,6 +4,29 @@
 
 **RTK** (Reasonix Token Kit) = historical internal code name for "archolith-filter", used prior to public release and remediation phases. References to "RTK" in older archived documents, comments, or deprecated notes refer to this project's earlier iteration. The current project name is **archolith-filter**.
 
+## 2026-09-07 — Post-launch remediation: Wave 2 (performance)
+
+- **perf(telemetry):** `FilterTelemetryStore` uses `deque(maxlen=...)`, replacing an O(n) `list.pop(0)` on
+  every record once full (M4 c8). The cl100k_base encoding is built once via `lru_cache` instead of per
+  recorded call; only successful results are cached, so a tiktoken-less environment still falls back every
+  call (L7 c8).
+- **perf:** `_is_binary_output` uses `str.count` over the scan window instead of a per-character Python loop
+  across up to 64k chars of every tool result. The old loop stopped at the threshold, so the count it
+  reported was always threshold+1; the real count in the window is now reported (L6 c8).
+- **perf(filters):** `fs_listing` (21 patterns) and `logs` (10) each compile to a single alternation instead
+  of a sequential list scan. Verified against the previous lists over 79 name and 67 line cases with zero
+  differences (L-7 c6, L-8 c6).
+- **perf(shrink):** `read_file_truncate` tokenizes each declaration line once instead of up to three times
+  (F-03). `truncate_for_tokens` / `truncate_read_file_for_tokens` accept an optional pre-computed count and
+  the orchestrator passes the one it already made, cutting full-string tokenizations from 3 to 2 in the
+  affected band (F-14). Both verified output-identical.
+- **fix(paths):** workspace-root detection warns instead of silently falling back to CWD, and the module
+  docstring's description of that fallback is corrected (H3-dg). `_infer_project_roots` uses `os.scandir`
+  (M5 — one-time cost, since `get_path_config` caches).
+- **dropped:** M-8 (c6) `_collapse_stack_frames` "double classification" is not reproducible against current
+  code — each frame is classified once into `classified`; only the two filtering passes over that list remain.
+- **tests:** added `TestKnownTokenCountReuse` and `TestWorkspaceRootFallback`.
+
 ## 2026-09-07 — Post-launch remediation: Wave 1 (consolidation / DRY)
 
 - **refactor(filters):** `build_output` and `json_output` now call the shared `_extract_header` instead of
