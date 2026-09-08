@@ -15,6 +15,7 @@ class TestRedactSecrets:
     def test_aws_asia_key_redacted(self):
         result = redact_secrets("key: ASIAIOSFODNN7EXAMPLE12")
         assert "[REDACTED]" in result.output
+        assert "ASIAIOSFODNN7EXAMPLE12" not in result.output
 
     def test_aws_key_too_short_not_redacted(self):
         # 15 chars after prefix instead of 16 — should NOT match.
@@ -33,16 +34,19 @@ class TestRedactSecrets:
         key = "sk-ant-" + "b" * 22
         result = redact_secrets(f"key={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     def test_openai_project_key_redacted(self):
         key = "sk-proj-" + "c" * 42
         result = redact_secrets(f"OPENAI={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     def test_openai_standard_key_redacted(self):
         key = "sk-" + "d" * 48
         result = redact_secrets(f"key={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     def test_sk_prefix_specificity(self):
         """sk-ant-api03- should match before sk-ant-."""
@@ -56,16 +60,19 @@ class TestRedactSecrets:
         key = "github_pat_" + "e" * 38
         result = redact_secrets(f"GH_PAT={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     def test_github_classic_pat_redacted(self):
         key = "ghp_" + "f" * 38
         result = redact_secrets(f"GH={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     def test_gitlab_pat_redacted(self):
         key = "glpat-" + "g" * 22
         result = redact_secrets(f"GL={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     # ── Pattern 4: Payment keys ──
 
@@ -73,6 +80,7 @@ class TestRedactSecrets:
         key = "sk_live_" + "h" * 26
         result = redact_secrets(f"STRIPE={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     # ── Pattern 5: SaaS tokens ──
 
@@ -80,11 +88,13 @@ class TestRedactSecrets:
         key = "xoxb-1234567890-abcdefghij"
         result = redact_secrets(f"SLACK={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     def test_sendgrid_key_redacted(self):
         key = "SG." + "a" * 24 + "." + "b" * 45
         result = redact_secrets(f"SENDGRID={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     # ── Pattern 6: Package registry tokens ──
 
@@ -92,11 +102,13 @@ class TestRedactSecrets:
         key = "npm_" + "c" * 38
         result = redact_secrets(f"NPM_TOKEN={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     def test_pypi_token_redacted(self):
         key = "pypi-" + "d" * 22
         result = redact_secrets(f"PYPI={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     # ── Pattern 7: Observability ──
 
@@ -104,6 +116,7 @@ class TestRedactSecrets:
         dsn = "https://abc123def456@sentry.io/12345"
         result = redact_secrets(f"SENTRY_DSN={dsn}")
         assert "[REDACTED]" in result.output
+        assert dsn not in result.output
 
     # ── Pattern 8: JWTs ──
 
@@ -111,6 +124,7 @@ class TestRedactSecrets:
         jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc123def456"
         result = redact_secrets(f"token={jwt}")
         assert "[REDACTED]" in result.output
+        assert jwt not in result.output
 
     # ── Pattern 9: Private key headers ──
 
@@ -125,26 +139,31 @@ class TestRedactSecrets:
         cs = "mongodb://admin:secretpass@prod-db.example.com:27017/mydb"
         result = redact_secrets(f"DB_URL={cs}")
         assert "[REDACTED]" in result.output
+        assert cs not in result.output
 
     def test_postgres_connection_string_redacted(self):
         cs = "postgres://user:pass@localhost:5432/mydb"
         result = redact_secrets(f"DATABASE_URL={cs}")
         assert "[REDACTED]" in result.output
+        assert cs not in result.output
 
     def test_redis_connection_string_redacted(self):
         cs = "redis://:password@redis.example.com:6379/0"
         result = redact_secrets(f"REDIS_URL={cs}")
         assert "[REDACTED]" in result.output
+        assert cs not in result.output
 
     # ── Pattern 11: Generic key=value (32+ char) ──
 
     def test_api_key_32plus_chars_redacted(self):
         result = redact_secrets(f'api_key: "{"a" * 34}"')
         assert "[REDACTED]" in result.output
+        assert "a" * 34 not in result.output
 
     def test_secret_key_32plus_chars_redacted(self):
         result = redact_secrets(f'secret_key = "{"b" * 36}"')
         assert "[REDACTED]" in result.output
+        assert "b" * 36 not in result.output
 
     # ── False positive guards ──
 
@@ -175,6 +194,7 @@ class TestRedactSecrets:
         text = f'{{"api_key": "sk-{"d" * 48}"}}'
         result = redact_secrets(text)
         assert "[REDACTED]" in result.output
+        assert "d" * 48 not in result.output
 
     def test_secrets_in_log_lines(self):
         text = "[2026-05-27T14:30:00Z] INFO Using key AKIAIOSFODNN7EXAMPLE for auth"
@@ -229,6 +249,7 @@ class TestAuditCalibration2026_06_20:
         key = "sk-" + "x" * 60
         result = redact_secrets(f"OPENAI={key}")
         assert "[REDACTED]" in result.output
+        assert key not in result.output
 
     def test_openai_short_31_char_not_redacted(self):
         """Keys shorter than 32 chars after sk- are NOT redacted
@@ -257,6 +278,7 @@ class TestAuditCalibration2026_06_20:
             key = prefix + "z" * 42
             result = redact_secrets(f"OPENAI={key}")
             assert "[REDACTED]" in result.output, f"{prefix} variant should be redacted"
+            assert key not in result.output, f"{prefix} secret should be removed"
 
     def test_asia_aws_key_still_redacted(self):
         """Regression guard for audit's incorrect SEC-B1 claim that 'ASIA'
@@ -275,12 +297,14 @@ class TestAuditCalibration2026_06_20:
         text = 'auth_token="' + "a" * 32 + '"'
         result = redact_secrets(text)
         assert "[REDACTED]" in result.output
+        assert "a" * 32 not in result.output
 
     def test_authToken_camel_case_quoted_redacted(self):
         """camelCase `authToken` keyword with quoted 32+ value is caught."""
         text = 'authToken: "' + "b" * 36 + '"'
         result = redact_secrets(text)
         assert "[REDACTED]" in result.output
+        assert "b" * 36 not in result.output
 
     def test_auth_token_in_json_dict_NOT_redacted(self):
         """Documented limitation: when the keyword is JSON-quoted
@@ -300,6 +324,7 @@ class TestAuditCalibration2026_06_20:
         text = 'TWILIO_AUTH_TOKEN="' + "f" * 32 + '"'
         result = redact_secrets(text)
         assert "[REDACTED]" in result.output
+        assert "f" * 32 not in result.output
 
     def test_bare_auth_token_NOT_redacted_for_now(self):
         """Documented limitation: bare `auth_token = <32 hex>` without
