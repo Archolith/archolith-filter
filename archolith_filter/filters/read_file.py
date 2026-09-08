@@ -256,6 +256,14 @@ def _collapse_generated_block(
 
 
 def _find_bracket_close(lines: list[str], start: int, open_char: str, close_char: str) -> int:
+    """Find the line index just past the bracket opened at *start*.
+
+    Counts brackets textually, without tracking string or comment state, so a
+    bracket inside a string literal or comment shifts the depth. The consequence
+    is a literal block that ends earlier or later than it should — a compression
+    boundary being off, never malformed output — so the simpler scan is kept
+    deliberately. Add quote-state tracking here if that boundary starts mattering.
+    """
     first_line = lines[start]
     last_open_pos = first_line.rfind(open_char)
     depth = first_line[last_open_pos:].count(open_char) - first_line[last_open_pos:].count(close_char)

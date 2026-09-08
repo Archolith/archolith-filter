@@ -35,7 +35,9 @@ _BUILD_SUCCESS_RE = re.compile(
 )
 # Build failure markers
 _BUILD_FAILURE_RE = re.compile(
-    r"BUILD FAILED|BUILD FAILURE|FAILURE|error:",
+    # \berror: so "error:" matches as a word, not inside identifiers such as
+    # "no_error:" or "SyntaxError:" written mid-token.
+    r"BUILD FAILED|BUILD FAILURE|FAILURE|\berror:",
     re.IGNORECASE,
 )
 # Warning lines to preserve even on success

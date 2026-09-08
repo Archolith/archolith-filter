@@ -229,7 +229,7 @@ def _serialize_kv(data: dict[str, object], opts: JsonFilterOptions) -> str:
     omitted_keys = len(data) - opts.kv_max_keys
     if omitted_keys > 0:
         remaining = ", ".join(list(data.keys())[opts.kv_max_keys : opts.kv_max_keys + 5])
-        lines.append(f"... +{omitted_keys} more keys: [{remaining}]")
+        lines.append(f"... +{omitted_keys_suffix(omitted_keys)}: [{remaining}]")
 
     return "\n".join(lines)
 
@@ -314,7 +314,7 @@ def _serialize_dotkey(data: dict[str, object], opts: JsonFilterOptions) -> str:
         omitted = len(leaves) - opts.dotkey_max_keys
         lines = [f"{k[:opts.csv_max_key_length]}: {_format_flat_value(v, opts)}" for k, v in shown]
         remaining = ", ".join(k for k, _ in leaves[opts.dotkey_max_keys : opts.dotkey_max_keys + 5])
-        lines.append(f"... +{omitted_keys_suffix(omitted)} more keys: [{remaining}]")
+        lines.append(f"... +{omitted_keys_suffix(omitted)}: [{remaining}]")
         return "\n".join(lines)
 
     lines = [f"{k}: {_format_flat_value(v, opts)}" for k, v in leaves]
@@ -322,8 +322,8 @@ def _serialize_dotkey(data: dict[str, object], opts: JsonFilterOptions) -> str:
 
 
 def omitted_keys_suffix(count: int) -> str:
-    """Return the grammatically correct suffix for a count of omitted keys."""
-    return str(count)
+    """Return "1 more key" / "N more keys" with the count's correct plural."""
+    return f"{count} more key" if count == 1 else f"{count} more keys"
 
 
 # ─── Legacy recursive compression (fallback) ───
@@ -376,7 +376,7 @@ def _compress_value(value: object, depth: int, opts: JsonFilterOptions) -> str:
 
         if omitted_keys > 0:
             remaining = ", ".join(keys[opts.max_keys_per_object :])
-            entries.append(f"{'  ' * (depth + 1)}... +{omitted_keys} more keys: [{remaining}]")
+            entries.append(f"{'  ' * (depth + 1)}... +{omitted_keys_suffix(omitted_keys)}: [{remaining}]")
 
         close_brace = "  " * depth + "}"
         joined_entries = ",\n".join(entries)

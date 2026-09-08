@@ -18,7 +18,9 @@ def shrink_json_long_strings(json_str: str) -> str:
         head = json_str[:200]
         return f"{head}…[shrunk: {len(json_str)} chars, unparsed]"
 
-    if not isinstance(parsed, dict) or isinstance(parsed, list):
+    # Only top-level objects are shrunk. The previous second clause
+    # (isinstance(parsed, list)) was unreachable: a list is never a dict.
+    if not isinstance(parsed, dict):
         return json_str
 
     output: dict[str, object] = {}

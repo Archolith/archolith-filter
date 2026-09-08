@@ -159,3 +159,20 @@ class TestWorkspaceRootFallback:
         roots = paths._infer_project_roots(str(tmp_path))
 
         assert sorted(r.rsplit("/", 1)[-1] for r in roots) == ["proj1", "proj2", "proj3"]
+
+
+class TestPathRegexUrlExclusion:
+    """Wave 3 (L9 c8): URL components must not read as filesystem paths."""
+
+    def test_urls_are_not_paths(self):
+        from archolith_filter.paths import _FILE_PATH_RE
+
+        for url in ("https://example.com/a/b", "http://localhost:8080/api/v1", "ftp://h/p"):
+            assert [m.group(0) for m in _FILE_PATH_RE.finditer(url)] == [], url
+
+    def test_real_paths_still_match(self):
+        from archolith_filter.paths import _FILE_PATH_RE
+
+        for path in ("/usr/local/lib/thing.py", "C:/Users/x/y.py", "src/main.py",
+                     "./rel/path.txt", "../parent/thing.txt"):
+            assert [m.group(0) for m in _FILE_PATH_RE.finditer(path)] == [path], path

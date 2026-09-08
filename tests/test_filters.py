@@ -1612,3 +1612,39 @@ class TestConfigEnvBindings:
 
         monkeypatch.setenv("ARCHOLITH_FILTER_GENERIC_HEAD", "abc")
         assert from_env().generic_head == FilterConfig().generic_head
+
+
+class TestWave3Correctness:
+    """Wave 3 fixes from archolith-filter-post-launch-remediation-plan.md."""
+
+    def test_single_omitted_key_is_singular(self):
+        # M-7 (c6): omitted_keys_suffix was an identity function, so the output
+        # read "+1 more keys".
+        data = {f"key_{i}": f"v{i}" for i in range(11)}
+        r = json_filter(json.dumps(data), JsonFilterOptions(kv_enabled=True, kv_min_keys=3, kv_max_keys=10))
+        assert "+1 more key:" in r.output
+        assert "more keys" not in r.output
+
+    def test_multiple_omitted_keys_stay_plural(self):
+        data = {f"key_{i}": f"v{i}" for i in range(30)}
+        r = json_filter(json.dumps(data), JsonFilterOptions(kv_enabled=True, kv_min_keys=3, kv_max_keys=10))
+        assert "+20 more keys:" in r.output
+
+    def test_build_failure_regex_requires_word_boundary(self):
+        # M-5 (c6): bare "error:" matched inside larger tokens. Tested at the
+        # regex level, because both outcomes of the branch using it currently
+        # call generic_filter with identical arguments (see CHANGELOG note).
+        from archolith_filter.filters.build_output import _BUILD_FAILURE_RE
+
+        assert not _BUILD_FAILURE_RE.search("no_error: fine")
+        assert not _BUILD_FAILURE_RE.search("zerror: fine")
+        assert _BUILD_FAILURE_RE.search("error: compilation failed")
+        assert _BUILD_FAILURE_RE.search("  error: indented")
+        assert _BUILD_FAILURE_RE.search("BUILD FAILED")
+
+    def test_cargo_test_and_build_route_differently(self):
+        # M6 (c8): both live in _TEST_BINS and _BUILD_BINS.
+        assert classify_command("cargo test --all").category == CommandCategory.TEST
+        assert classify_command("cargo build --release").category == CommandCategory.BUILD
+        assert classify_command("go test ./...").category == CommandCategory.TEST
+        assert classify_command("go build ./cmd").category == CommandCategory.BUILD

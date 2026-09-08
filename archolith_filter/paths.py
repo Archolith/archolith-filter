@@ -36,9 +36,14 @@ class PathConfig:
 # Match file paths (Windows drive letter or POSIX absolute/relative with 2+ segments).
 _FILE_PATH_RE = re.compile(
     r"""
-    (?:[A-Za-z]:[\\/]           # Windows: C:\ or D:/
-    | (?<!\w)/                  # POSIX absolute: / (not preceded by word char)
-    | (?<![/\\\w])(?:\.\.?[\\/])?\w+[/\\]  # Relative with separator: src/ or ./src/
+    (?:(?<![A-Za-z0-9])[A-Za-z]:[\\/]  # Windows: C:\ or D:/ — the lookbehind
+                                # keeps a URL scheme ("https://") from reading as
+                                # a drive letter
+    | (?<![\w:/])/              # POSIX absolute: / (not preceded by word char,
+                                # ":" or "/", so "http://host/x" is not a path)
+    | (?<![/\\\w:.])(?:\.\.?[\\/])?\w+[/\\]  # Relative with separator: src/ or
+                                # ./src/ — ":" and "." excluded so "host:8080/api"
+                                # and "example.com/a" are not paths
     )
     (?:[^\s:*?"<>|]+[\\/])*     # middle segments
     [^\s:*?"<>|]+               # final segment (filename)

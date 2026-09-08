@@ -32,9 +32,37 @@ def truncate_for_chars(text: str, max_chars: int) -> str:
     head_budget = max(0, max_chars - tail_budget)
     head = text[:head_budget]
     tail = text[-tail_budget:] if tail_budget > 0 else ""
-    dropped = len(text) - len(head) - len(tail)
-    marker = f"\n\n[…truncated {dropped} chars — raise budget or call the tool with a narrower scope…]\n\n"
-    return f"{head}{marker}{tail}"
+
+    def render(head_text: str, tail_text: str) -> str:
+        dropped = len(text) - len(head_text) - len(tail_text)
+        marker = (
+            f"\n\n[…truncated {dropped} chars"
+            " — raise budget or call the tool with a narrower scope…]\n\n"
+        )
+        return f"{head_text}{marker}{tail_text}"
+
+    # The marker is part of the output, so head+marker+tail could exceed
+    # max_chars by the marker's length. Give the marker room by shrinking the
+    # head, then the tail; re-render each time because the dropped count (and so
+    # the marker's own length) changes with them.
+    result = render(head, tail)
+    for _ in range(3):
+        overflow = len(result) - max_chars
+        if overflow <= 0:
+            break
+        if head:
+            head = head[: max(0, len(head) - overflow)]
+        elif tail:
+            tail = tail[overflow:]
+        else:
+            break
+        result = render(head, tail)
+
+    # Budgets smaller than the marker itself cannot carry one. Honor max_chars
+    # rather than the marker.
+    if len(result) > max_chars:
+        return text[:max_chars]
+    return result
 
 
 def truncate_for_tokens(text: str, max_tokens: int, text_tokens: int | None = None) -> str:

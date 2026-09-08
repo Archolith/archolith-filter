@@ -39,7 +39,11 @@ def is_verbose_command(command: str) -> bool:
 
 IMPORT_RE = re.compile(r"^\s*(?:from\s+\S+\s+)?import\s+")
 FROM_IMPORT_RE = re.compile(r"^\s*from\s+\S+\s+import\s+")
-COMMENT_LINE_RE = re.compile(r"^\s*(?:#\s|//\s?|/\*|\*\s|\*/)")
+COMMENT_LINE_RE = re.compile(r"^\s*(?:#\s|//\s?|/\*)")
+# Block-comment continuation lines (" * foo", " */"). Only meaningful while
+# inside a /* ... */ block: "* item" is also a Markdown bullet, so matching it
+# unconditionally made comment collapsing eat bullet lists.
+BLOCK_COMMENT_CONT_RE = re.compile(r"^\s*(?:\*\s|\*/)")
 # Single-line comments only (#, //) — narrower than COMMENT_LINE_RE, used for
 # collapsing consecutive line-comment runs without matching block-comment bodies.
 LINE_COMMENT_RE = re.compile(r"^\s*(?://|#)\s")
@@ -50,9 +54,16 @@ def is_import_line(line: str) -> bool:
     return bool(IMPORT_RE.match(line) or FROM_IMPORT_RE.match(line))
 
 
-def is_comment_line(line: str) -> bool:
-    """Return True if *line* looks like a comment (#, //, /*, * , */)."""
-    return bool(COMMENT_LINE_RE.match(line))
+def is_comment_line(line: str, in_block_comment: bool = False) -> bool:
+    """Return True if *line* looks like a comment.
+
+    Always matches ``#``, ``//`` and ``/*`` openers. ``* foo`` and ``*/`` count
+    only when *in_block_comment* is True, since outside a block they are just as
+    likely to be Markdown bullets.
+    """
+    if COMMENT_LINE_RE.match(line):
+        return True
+    return in_block_comment and bool(BLOCK_COMMENT_CONT_RE.match(line))
 
 
 def is_line_comment(line: str) -> bool:

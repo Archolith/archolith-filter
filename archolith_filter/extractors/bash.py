@@ -33,6 +33,10 @@ _GIT_STATUS_MODIFIED_RE = re.compile(r"^\s+(?:modified|new file|deleted):\s+(.+)
 _GIT_DIFF_FILE_RE = re.compile(r"^(?:\+\+\+|---)\s+(?:a/|b/)(.+)", re.MULTILINE)
 _GIT_LOG_RE = re.compile(r"^([0-9a-f]{7,}) (.+)", re.MULTILINE)
 
+# The 120-char cap on the captured message is deliberate: these facts are
+# summaries fed back into context, and an unbounded capture would let one long
+# error line dominate the extraction budget. Long messages are truncated, not
+# dropped.
 _ERROR_RE = re.compile(r"(?:error|Error|ERROR):?\s+(.{0,120})")
 
 

@@ -38,6 +38,9 @@ def _collapse_imports_and_comments(lines: list[str]) -> list[str]:
     comment_count = 0
     import_start = -1
     comment_start = -1
+    # Tracks whether we are inside a /* ... */ block, so that "* foo"
+    # continuation lines count as comments there but not in Markdown prose.
+    in_block_comment = False
 
     while idx < len(lines):
         line = lines[idx]
@@ -56,12 +59,17 @@ def _collapse_imports_and_comments(lines: list[str]) -> list[str]:
             import_start = -1
             import_count = 0
 
-        if is_comment_line(line):
+        if is_comment_line(line, in_block_comment):
+            if "/*" in line and "*/" not in line:
+                in_block_comment = True
+            elif "*/" in line:
+                in_block_comment = False
             if comment_start == -1:
                 comment_start = idx
             comment_count += 1
             idx += 1
             continue
+        in_block_comment = False
         if comment_start != -1:
             if comment_count > 5:
                 result_lines.append(lines[comment_start])
@@ -214,20 +222,23 @@ def truncate_read_file_for_tokens(
     if not head_decl and not tail_decl:
         return truncate_for_tokens(text, max_tokens)
 
-    dropped = len(decl_lines) - len(head_decl) - len(tail_decl)
-    marker = (
-        f"\n\n[…read_file compressed: ~{dropped} declarations & body lines omitted"
-        f" — raise budget or narrow the read scope…]\n\n"
-    )
-    result = "\n".join(head_decl) + marker + "\n".join(tail_decl)
-    while head_decl and count_tokens(result) > max_tokens:
-        head_decl.pop()
+    def render() -> str:
         dropped = len(decl_lines) - len(head_decl) - len(tail_decl)
         marker = (
             f"\n\n[…read_file compressed: ~{dropped} declarations & body lines omitted"
             f" — raise budget or narrow the read scope…]\n\n"
         )
-        result = "\n".join(head_decl) + marker + "\n".join(tail_decl)
+        return "\n".join(head_decl) + marker + "\n".join(tail_decl)
+
+    # Drop head declarations first, then tail ones. Trimming only the head left
+    # the result over budget whenever the tail alone still exceeded it.
+    result = render()
+    while (head_decl or tail_decl) and count_tokens(result) > max_tokens:
+        if head_decl:
+            head_decl.pop()
+        else:
+            tail_decl.pop(0)
+        result = render()
 
     if not head_decl and not tail_decl:
         return truncate_for_tokens(text, max_tokens)

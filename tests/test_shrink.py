@@ -526,3 +526,53 @@ class TestKnownTokenCountReuse:
         orch.shrink_oversized_tool_results_by_tokens(msgs, self.BUDGET)
 
         assert seen.count(len(self.CONTENT)) == 2
+
+
+class TestTruncateRespectsCharBudget:
+    """Wave 3 (F-13): output including the marker must not exceed max_chars."""
+
+    def test_never_exceeds_budget(self):
+        for budget in (1, 20, 79, 80, 81, 100, 250, 1000):
+            for size in (0, 1, 200, 5000):
+                out = truncate_for_chars("x" * size, budget)
+                assert len(out) <= budget, (budget, size, len(out))
+
+    def test_head_and_tail_preserved_at_realistic_budget(self):
+        text = "HEAD" + ("y" * 5000) + "TAILEND"
+        out = truncate_for_chars(text, 500)
+        assert len(out) <= 500
+        assert out.startswith("HEAD")
+        assert out.endswith("TAILEND")
+
+
+class TestCommentDetectionBlockState:
+    """Wave 3 (L-1 c6): "* item" is a comment only inside a block comment."""
+
+    def test_markdown_bullets_are_not_comments(self):
+        from archolith_filter._patterns import is_comment_line
+
+        assert not is_comment_line("* item")
+        assert not is_comment_line("  * nested item")
+        assert is_comment_line("* item", True)
+
+    def test_openers_always_count(self):
+        from archolith_filter._patterns import is_comment_line
+
+        assert is_comment_line("# note")
+        assert is_comment_line("// note")
+        assert is_comment_line("/* start")
+
+    def test_markdown_list_survives_collapsing(self):
+        from archolith_filter.shrink.read_file_truncate import _collapse_imports_and_comments
+
+        md = ["# Title", ""] + [f"* bullet {i}" for i in range(8)] + ["text"]
+        out = _collapse_imports_and_comments(md)
+        assert not any("more comment lines" in line for line in out)
+        assert sum(1 for line in out if line.startswith("* bullet")) == 8
+
+    def test_block_comment_still_collapses(self):
+        from archolith_filter.shrink.read_file_truncate import _collapse_imports_and_comments
+
+        block = ["/* header"] + [f" * line {i}" for i in range(8)] + [" */", "code()"]
+        out = _collapse_imports_and_comments(block)
+        assert any("more comment lines" in line for line in out)

@@ -46,6 +46,10 @@ _TEST_BINS = frozenset({
     "ruby", "rspec", "cucumber",
 })
 
+# cargo, go, mvn, gradle and dotnet appear in both _TEST_BINS and _BUILD_BINS
+# on purpose: the binary alone does not say which it is. _is_test_command runs
+# first and disambiguates those five on the subcommand ("cargo test" vs
+# "cargo build"), so a build invocation falls through to _is_build_command.
 _BUILD_BINS = frozenset({
     "cargo", "go", "mvn", "gradle", "make", "cmake",
     "dotnet", "msbuild", "xcodebuild", "bazel", "ninja", "build",
